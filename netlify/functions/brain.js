@@ -26,7 +26,7 @@ exports.handler = async function (event) {
 
   try {
     const r = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + KEY,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + KEY,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -36,8 +36,7 @@ exports.handler = async function (event) {
           generationConfig: {
             temperature: 0.4,
             maxOutputTokens: 1024,
-            responseMimeType: "application/json",
-            thinkingConfig: { thinkingBudget: 0 }
+            responseMimeType: "application/json"
           }
         })
       }
