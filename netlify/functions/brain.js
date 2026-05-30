@@ -33,13 +33,21 @@ exports.handler = async function (event) {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: sys }] },
           contents: [{ role: "user", parts: [{ text: userText }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 600, responseMimeType: "application/json" }
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 1024,
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingBudget: 0 }
+          }
         })
       }
     );
     const data = await r.json();
     let txt = "";
-    try { txt = data.candidates[0].content.parts[0].text; } catch (e) {}
+    try {
+      const parts = (data.candidates[0].content.parts) || [];
+      txt = parts.map(function (pt) { return pt.text || ""; }).join("").trim();
+    } catch (e) {}
     let out;
     try { out = JSON.parse(txt); } catch (e) { out = { action: "answer", text: (txt && txt.trim()) ? txt : "Bunu tam anlayamadım, tekrar söyler misin?" }; }
     if (!out || !out.action) out = { action: "answer", text: "Bunu tam anlayamadım, tekrar söyler misin?" };
