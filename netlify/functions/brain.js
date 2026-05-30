@@ -48,6 +48,12 @@ exports.handler = async function (event) {
       const parts = (data.candidates[0].content.parts) || [];
       txt = parts.map(function (pt) { return pt.text || ""; }).join("").trim();
     } catch (e) {}
+    if (!txt) {
+      // TEŞHİS: Gemini neden boş döndü? (anahtar/kota hatasını göster)
+      var dbg = "";
+      try { dbg = data && data.error ? ("Gemini hatasi: " + (data.error.message || JSON.stringify(data.error))) : ("Bos yanit: " + JSON.stringify(data).slice(0, 250)); } catch (e2) { dbg = "bilinmiyor"; }
+      return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: "[TESHIS] " + dbg }) };
+    }
     let out;
     try { out = JSON.parse(txt); } catch (e) { out = { action: "answer", text: (txt && txt.trim()) ? txt : "Bunu tam anlayamadım, tekrar söyler misin?" }; }
     if (!out || !out.action) out = { action: "answer", text: "Bunu tam anlayamadım, tekrar söyler misin?" };
