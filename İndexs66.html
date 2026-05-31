@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TVDesk — Canlı Bağlantı</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --bg:#0e0f13;--panel:#1b1e27;--line:#2a2e3a;--ink:#e8eaf0;
+    --dim:#8b90a0;--accent:#ff5c39;--accent2:#34d399;--pad:#191c24;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;
+    font-family:ui-monospace,'Cascadia Code',monospace}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);overflow:hidden}
+  .hidden{display:none!important}
+
+  /* ---------- LANDING ---------- */
+  #landing{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:30px;padding:24px;text-align:center}
+  .logo{font-size:34px;font-weight:700}
+  .logo span{color:var(--accent)}
+  .sub{color:var(--dim);font-size:14px;max-width:420px;line-height:1.6}
+  .choice{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+  .card{
+    width:230px;padding:28px 22px;border:2px solid var(--line);border-radius:14px;
+    background:var(--panel);cursor:pointer;transition:.15s;
+  }
+  .card:hover{border-color:var(--accent);transform:translateY(-3px)}
+  .card .ic{font-size:42px}
+  .card .t{font-size:20px;font-weight:700;margin-top:10px}
+  .card .d{font-size:12px;color:var(--dim);margin-top:8px;line-height:1.5}
+
+  /* ---------- TV MODE ---------- */
+  #tv{height:100%;position:relative}
+  .tvtop{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .tvtop .brand{font-weight:700}
+  .tvtop .brand span{color:var(--accent)}
+  .status{font-size:13px;color:var(--dim)}
+  .status.on{color:var(--accent2)}
+  .status.on::before{content:"● "}
+
+  #pairBox{height:calc(100% - 56px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:20px;text-align:center}
+  #pairBox h2{font-size:26px;font-weight:700}
+  #qr{background:#fff;padding:16px;border-radius:14px}
+  .codebig{font-size:30px;letter-spacing:6px;background:var(--panel);border:1px solid var(--line);padding:12px 22px;border-radius:10px;font-weight:700}
+  .hintline{color:var(--dim);font-size:14px;max-width:460px;line-height:1.6}
+
+  #tvDesk{height:calc(100% - 56px);position:relative;display:none}
+  .tvDeskInner{padding:40px;height:100%}
+  #tvDesk h1{font-size:clamp(24px,4vw,44px);font-weight:700;margin-bottom:18px}
+  #tvDesk p{color:var(--dim);font-size:15px;max-width:560px;line-height:1.7}
+  .tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;max-width:680px;margin-top:26px}
+  .tile{border:2px solid var(--line);border-radius:12px;padding:22px;background:var(--panel);transition:.12s}
+  .tile.hot{border-color:var(--accent);transform:translateY(-3px)}
+  .tile .tt{font-size:20px;font-weight:700}
+  .tile .dd{font-size:13px;color:var(--dim);margin-top:6px}
+  .typed{margin-top:26px;background:#0c0d12;border:1px solid var(--line);border-radius:10px;padding:16px;min-height:70px;font-size:20px;max-width:680px;white-space:pre-wrap;word-break:break-word}
+  .cheats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:880px;margin-top:22px}
+  .cheat{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--panel)}
+  .cheat b{display:block;font-size:18px;color:var(--accent2)}
+  .cheat span{display:block;font-size:13px;color:var(--dim);margin-top:5px}
+  @media(max-width:760px){.cheats{grid-template-columns:repeat(2,1fr)}}
+  #cur{position:absolute;width:30px;height:30px;left:200px;top:200px;z-index:60;pointer-events:none;will-change:left,top}
+  #cur.click{animation:pop .18s ease}
+  @keyframes pop{0%{transform:scale(1)}40%{transform:scale(.7)}100%{transform:scale(1)}}
+
+  /* ---------- PHONE MODE ---------- */
+  #phone{height:100%;display:none;flex-direction:column}
+  .phtop{padding:14px 18px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;justify-content:space-between;align-items:center}
+  .phtop b{font-weight:700}
+  #phStatus{font-size:12px;color:var(--dim)}
+  #phStatus.on{color:var(--accent2)}
+  #phStatus.on::before{content:"● "}
+
+  #connectUI{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;text-align:center}
+  #connectUI p{color:var(--dim);font-size:14px;line-height:1.6;max-width:340px}
+  #codeInput{font-size:26px;letter-spacing:6px;text-align:center;width:200px;padding:14px;border-radius:10px;border:2px solid var(--line);background:var(--panel);color:var(--ink);text-transform:uppercase}
+  .bigbtn{background:var(--accent);color:#111;border:none;font-weight:700;font-size:17px;padding:15px 30px;border-radius:12px;cursor:pointer}
+  .bigbtn:active{transform:scale(.97)}
+  .scanbtn{background:transparent;border:2px solid var(--line);color:var(--ink);font-size:14px;padding:12px 20px;border-radius:10px;cursor:pointer}
+
+  #ctrlUI{flex:1;display:none;flex-direction:column}
+  #touch{flex:1;margin:14px;border-radius:14px;border:1px dashed var(--line);
+    background:repeating-linear-gradient(0deg,transparent,transparent 26px,#ffffff08 26px,#ffffff08 27px),
+      repeating-linear-gradient(90deg,transparent,transparent 26px,#ffffff08 26px,#ffffff08 27px),var(--pad);
+    display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:14px;text-align:center;touch-action:none;position:relative;user-select:none}
+  #touch .h{padding:24px;line-height:1.7;pointer-events:none}
+  .rip{position:absolute;border:2px solid var(--accent);border-radius:50%;pointer-events:none;animation:rp .4s ease-out forwards}
+  @keyframes rp{from{width:8px;height:8px;opacity:.9;transform:translate(-50%,-50%)}to{width:70px;height:70px;opacity:0;transform:translate(-50%,-50%)}}
+  .keys{display:flex;gap:10px;padding:0 14px 14px}
+  .kb{flex:1;padding:16px;border:1px solid var(--line);border-radius:11px;background:#14161d;color:var(--ink);font-size:14px;cursor:pointer}
+  .kb:active{transform:scale(.96)}
+  .kb.primary{background:var(--accent);color:#111;font-weight:700;border-color:var(--accent)}
+  #kbInput{position:absolute;opacity:0;height:0;width:0}
+  .err{color:var(--accent);font-size:13px;min-height:18px}
+  /* ===== ARYA YÜZÜ ===== */
+  #aryaFace{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.4vh;margin:1vh auto 0;user-select:none}
+  .faceWrap{width:min(30vh,230px);height:min(30vh,230px);border-radius:50%;
+    background:radial-gradient(circle at 50% 36%, #34406b 0%, #222a44 55%, #141a2b 100%);
+    box-shadow:0 0 70px rgba(110,150,255,.4), inset 0 6px 30px rgba(170,200,255,.22), inset 0 -10px 30px rgba(0,0,0,.3);
+    display:flex;align-items:center;justify-content:center;position:relative;
+    animation:breathe 4s ease-in-out infinite;
+    transition:box-shadow .3s ease, transform .25s ease}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.018)}}
+  /* DİNLERKEN: gözler büyür, öne eğilir, parlar */
+  .faceWrap.listen{box-shadow:0 0 95px rgba(120,230,170,.6), inset 0 6px 30px rgba(190,255,215,.3);animation:breathe 2.4s ease-in-out infinite}
+  /* KONUŞURKEN: zıplar, parlar */
+  .faceWrap.talk{box-shadow:0 0 100px rgba(130,180,255,.75), inset 0 6px 30px rgba(190,215,255,.34);animation:bob 1s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-7px) scale(1.03)}}
+  /* kaşlar */
+  .brows{position:absolute;top:27%;left:0;right:0;display:flex;justify-content:center;gap:24%;transition:transform .25s ease, opacity .25s}
+  .brow{width:13%;height:3.5%;min-height:5px;background:#9fb4e6;border-radius:6px;opacity:.0;transition:transform .25s ease, opacity .25s}
+  .faceWrap.listen .brow{opacity:.85;transform:translateY(-30%)}     /* dinlerken kaş kalkar (meraklı) */
+  .faceWrap.talk .brow{opacity:.7}
+  .faceWrap.happy .brow{opacity:.6;transform:translateY(-12%)}
+  .eyes{position:absolute;top:36%;left:0;right:0;display:flex;justify-content:center;gap:26%}
+  .eye{width:15%;height:16%;min-width:28px;min-height:30px;background:radial-gradient(circle at 40% 35%, #ffffff, #cfe0ff 70%);border-radius:50%;
+    box-shadow:0 0 16px rgba(180,210,255,.85);animation:blink 4.5s infinite;position:relative;transition:transform .25s ease, height .2s ease}
+  .eye::after{content:"";position:absolute;top:24%;left:26%;width:30%;height:30%;background:#1b2238;border-radius:50%;transition:all .25s}
+  .eye:nth-child(2){animation-delay:.12s}
+  @keyframes blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
+  .faceWrap.listen .eye{transform:scale(1.18)}     /* dinlerken gözler büyür */
+  .faceWrap.happy .eye{height:9%;border-radius:50% 50% 0 0}  /* mutluyken gözler kısılır (gülen göz) */
+  /* yanaklar */
+  .faceWrap::before,.faceWrap::after{content:"";position:absolute;top:54%;width:12%;height:8%;background:rgba(255,150,170,.0);border-radius:50%;filter:blur(3px);transition:background .3s}
+  .faceWrap::before{left:19%}
+  .faceWrap::after{right:19%}
+  .faceWrap.talk::before,.faceWrap.talk::after,.faceWrap.happy::before,.faceWrap.happy::after{background:rgba(255,150,170,.4)} /* konuşunca/gülünce yanak pembeleşir */
+  .mouth{position:absolute;bottom:24%;left:50%;transform:translateX(-50%);
+    width:20%;height:5%;min-height:8px;background:#ffd6e0;border-radius:0 0 90px 90px;
+    box-shadow:0 0 12px rgba(255,180,200,.6);transition:all .25s ease}
+  .faceWrap.happy .mouth{width:34%;height:16%;border-radius:0 0 90px 90px}  /* kocaman gülümseme */
+  .faceWrap.listen .mouth{width:14%;height:14%;border-radius:50%}           /* dinlerken minik "o" ağız */
+  .faceWrap.talk .mouth{animation:talk .26s infinite}
+  @keyframes talk{0%{height:6%;width:22%;border-radius:0 0 90px 90px}50%{height:22%;width:30%;border-radius:50%}100%{height:6%;width:22%;border-radius:0 0 90px 90px}}
+  #aryaName{font-size:clamp(20px,3vw,30px);font-weight:700;color:var(--ink);letter-spacing:.5px}
+  #aryaSays{font-size:clamp(18px,2.6vw,26px);color:var(--ink);max-width:84%;text-align:center;line-height:1.55;min-height:1.5em;transition:color .2s}
+  #aryaSays.live{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- LANDING -->
+<div id="landing">
+  <div class="logo">TV<span>Desk</span></div>
+  <div class="sub">Bu cihaz ne olacak? Televizyonda "TV" seç, telefonda "Telefon" seç.</div>
+  <div class="choice">
+    <div class="card" id="pickTV">
+      <div class="ic">📺</div><div class="t">TV</div>
+      <div class="d">Büyük ekran. Burada bir kod çıkacak, telefonla okutacaksın.</div>
+    </div>
+    <div class="card" id="pickPhone">
+      <div class="ic">📱</div><div class="t">Telefon</div>
+      <div class="d">Kumanda. TV'deki kodu girip touchpad olarak kullanacaksın.</div>
+    </div>
+    <div class="card" id="pickNote">
+      <div class="ic">💬</div><div class="t">Not yolla</div>
+      <div class="d">Uzaktaki sevdiğinin TV'sine sesli not gönder. (TV kodunu bir kere gir.)</div>
+    </div>
+  </div>
+</div>
+
+<!-- UZAKTAN NOT GÖNDERME (Dubai'deki kişi) -->
+<div id="noteSend" class="hidden">
+  <div class="tvtop"><div class="brand">TV<span>Desk</span> · Not</div><div class="status" id="nsStatus"></div></div>
+  <div style="max-width:520px;margin:0 auto;padding:18px;display:flex;flex-direction:column;gap:12px">
+    <h2 style="margin:6px 0">Sevdiğine not yolla</h2>
+    <label style="font-size:14px;color:var(--dim)">Onun TV kodu (bir kere gir, hatırlar)</label>
+    <input id="nsCode" placeholder="örn. 4823" style="font-size:22px;padding:14px;border-radius:12px;border:2px solid var(--line);background:#0c0d12;color:var(--ink);text-transform:uppercase;letter-spacing:3px">
+    <label style="font-size:14px;color:var(--dim)">Senin adın (TV'de "… diyor ki" diye okunur)</label>
+    <input id="nsFrom" placeholder="örn. Oğlun Ahmet" style="font-size:18px;padding:12px;border-radius:12px;border:2px solid var(--line);background:#0c0d12;color:var(--ink)">
+    <label style="font-size:14px;color:var(--dim)">Not</label>
+    <textarea id="nsText" rows="3" placeholder="örn. İlacını aldın mı? Akşam ararım." style="font-size:18px;padding:14px;border-radius:12px;border:2px solid var(--line);background:#0c0d12;color:var(--ink);resize:none"></textarea>
+    <div style="display:flex;gap:10px">
+      <button id="nsMic" class="kb" style="flex:1;padding:16px;font-size:18px">🎤 Söyle</button>
+      <button id="nsSend" class="kb primary" style="flex:2;padding:16px;font-size:18px">💬 Gönder</button>
+    </div>
+    <button id="nsBack" class="kb" style="background:transparent;color:var(--dim)">← geri</button>
+  </div>
+</div>
+
+<!-- TV -->
+<div id="tv" class="hidden">
+  <div class="tvtop"><div class="brand">TV<span>Desk</span> · TV</div><div class="status" id="tvStatus">bağlantı bekleniyor…</div></div>
+  <div id="noteBanner" style="display:none;margin:12px;padding:18px 20px;background:#16233f;border:2px solid #3b5bdb;border-radius:16px;font-size:24px;line-height:1.45"></div>
+  <div id="pairBox">
+    <h2>Telefonunla bağlan</h2>
+    <div id="qr"></div>
+    <div>veya bu kodu telefona gir:</div>
+    <div class="codebig" id="codeText">····</div>
+    <div class="hintline">Telefonda aynı adresi aç → "Telefon" seç → bu kodu gir. Aynı Wi-Fi'da olmanız yeterli.</div>
+  </div>
+  <div id="tvDesk">
+    <div class="tvDeskInner">
+      <div id="aryaFace">
+        <div class="faceWrap" id="faceWrap">
+          <div class="brows"><div class="brow"></div><div class="brow"></div></div>
+          <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+          <div class="mouth"></div>
+        </div>
+        <div id="aryaName">Arya</div>
+        <div id="aryaSays">Konuşmak için telefondaki kırmızı düğmeye dokun ve söyle.</div>
+      </div>
+      <div class="cheats">
+        <div class="cheat"><b>“Tarkan şarkısı”</b><span>müzik / video açar</span></div>
+        <div class="cheat"><b>“fotosentez nedir”</b><span>internette arar</span></div>
+        <div class="cheat"><b>“birinci” · “üçüncü” · “3”</b><span>o sonucu açar</span></div>
+        <div class="cheat"><b>“oku”</b><span>açık sayfayı sesli okur</span></div>
+        <div class="cheat"><b>“sonraki” · “bir önceki”</b><span>sonuçlar arası gez</span></div>
+        <div class="cheat"><b>“durdur” · “devam et”</b><span>videoyu kontrol et</span></div>
+        <div class="cheat"><b>“sus”</b><span>okumayı durdurur</span></div>
+        <div class="cheat"><b>“geri”</b><span>ana ekrana döner</span></div>
+        <div class="cheat"><b>“yardım”</b><span>ne yapabileceğini söyler</span></div>
+      </div>
+      <div class="tiles">
+        <div class="tile" data-n="Tarayıcı"><div class="tt">🔍 Tarayıcı</div><div class="dd">Araştırma, web</div></div>
+        <div class="tile" data-n="Video"><div class="tt">▶️ Video / EBA</div><div class="dd">Eğitim, müzik</div></div>
+      </div>
+      <div class="typed" id="typed"></div>
+    </div>
+    <!-- BROWSER VIEW -->
+    <div id="browserView" style="display:none;position:absolute;inset:0;background:var(--bg);flex-direction:column">
+      <div style="display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)">
+        <div id="bvBack" data-act="home" style="padding:8px 14px;border:1px solid var(--line);border-radius:8px;cursor:pointer">← Ana ekran</div>
+        <div style="flex:1;background:#0c0d12;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:16px;overflow:hidden;white-space:nowrap" id="bvUrl">adres VEYA aranacak kelime yaz…</div>
+        <div id="bvGo" data-act="go" style="padding:8px 18px;background:var(--accent);color:#111;font-weight:700;border-radius:8px;cursor:pointer">Git</div>
+      </div>
+      <iframe id="bvFrame" style="flex:1;width:100%;border:0;background:#fff;display:none" referrerpolicy="no-referrer"></iframe>
+      <div id="bvResults" style="flex:1;overflow-y:auto;padding:18px;display:none;flex-direction:column;gap:14px"></div>
+      <div id="bvMsg" style="display:none;position:absolute;inset:60px 0 0 0;align-items:center;justify-content:center;text-align:center;padding:30px;color:var(--dim);font-size:15px;line-height:1.7"></div>
+    </div>
+    <!-- YOUTUBE VIEW -->
+    <div id="ytView" style="display:none;position:absolute;inset:0;background:#000;flex-direction:column">
+      <div style="display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)">
+        <div id="ytBack" data-yt="home" style="padding:8px 14px;border:1px solid var(--line);border-radius:8px;cursor:pointer">← Ana ekran</div>
+        <div style="flex:1;background:#0c0d12;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:16px;overflow:hidden;white-space:nowrap" id="ytUrl">video adı yaz: ör. "matematik konu anlatımı"…</div>
+        <div id="ytGo" data-yt="go" style="padding:8px 18px;background:var(--accent);color:#111;font-weight:700;border-radius:8px;cursor:pointer">Ara</div>
+      </div>
+      <iframe id="ytFrame" style="flex:1;width:100%;border:0;background:#000;display:none" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+      <div id="ytResults" style="flex:1;overflow-y:auto;padding:16px;display:none;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;align-content:start"></div>
+      <div id="ytMsg" style="position:absolute;inset:60px 0 0 0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;color:var(--dim);font-size:15px;line-height:1.7">Telefondan video adını yaz (ör. "Atatürk belgeseli", "kesirler konu anlatımı"), sonra "Ara"ya bas. Çıkan listeden videoya tıkla.</div>
+    </div>
+    <!-- ANSWER VIEW (AI sesli cevap, büyük yazı) -->
+    <div id="answerView" style="display:none;position:absolute;inset:0;background:var(--bg);flex-direction:column;padding:4vh 6vw;overflow-y:auto;z-index:50">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px;flex-wrap:wrap">
+        <div style="padding:10px 16px;border:1px solid var(--line);border-radius:10px;font-size:16px">← "geri" de ya da ekrana dokun</div>
+        <div style="color:var(--accent2);font-size:16px">🔊 Cevabı dinliyorsun</div>
+      </div>
+      <div id="avText" style="font-size:32px;line-height:1.6;color:var(--ink);max-width:1150px"></div>
+      <div style="margin-top:26px;color:var(--dim);font-size:18px;line-height:1.6">Yeni soru için telefonda "🎤 Konuş"a bas. Tekrar dinlemek için "oku" de.</div>
+    </div>
+    <div id="cur"><svg width="30" height="30" viewBox="0 0 22 22"><path d="M2 2 L2 16 L6 12 L9 19 L12 18 L9 11 L15 11 Z" fill="#fff" stroke="#111" stroke-width="1.2"/></svg></div>
+  </div>
+</div>
+
+<!-- PHONE -->
+<div id="phone">
+  <div class="phtop"><b>TVDesk · Kumanda</b><span id="phStatus">bağlı değil</span></div>
+  <div id="connectUI">
+    <p>TV ekranındaki QR'ı okut, ya da TV'de görünen 4 haneli kodu aşağıya yaz.</p>
+    <input id="codeInput" maxlength="4" placeholder="••••" autocomplete="off" autocapitalize="characters">
+    <div class="err" id="phErr"></div>
+    <button class="bigbtn" id="connectBtn">Bağlan</button>
+  </div>
+  <div id="ctrlUI">
+    <!-- SESLİ MOD (varsayılan): tüm ekran dokun-konuş — görme engelli/okuma bilmeyen için -->
+    <div id="voiceMode" style="flex:1;display:flex;flex-direction:column">
+      <button id="voiceBig" style="flex:1;margin:14px;border:0;border-radius:24px;background:#e23b3b;color:#fff;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;line-height:1.3">
+        <span style="font-size:64px">🎤</span>
+        <span id="voiceBigLabel" style="font-size:30px">Dokun ve konuş</span>
+        <span style="font-size:16px;opacity:.85;font-weight:400">parmağını kaldır, dinlerim</span>
+      </button>
+      <div id="voiceStatus" style="text-align:center;color:var(--dim);font-size:16px;min-height:24px;margin:2px 0 6px;padding:0 14px"></div>
+      <div style="padding:0 14px 8px">
+        <button id="handsBtn" style="width:100%;padding:16px;font-size:18px;font-weight:700;border:0;border-radius:16px;background:#2a2f3e;color:#fff">🖐️ Eller serbest: Kapalı</button>
+        <div style="text-align:center;color:var(--dim);font-size:13px;margin-top:6px;line-height:1.5">Aç → telefonu bırak → <b>“Arya”</b> diye seslen, sonra ne istersen söyle.<br>Kapatmak için “Arya dur” de.</div>
+      </div>
+      <div style="display:flex;gap:12px;padding:0 14px 14px;align-items:center;justify-content:flex-end">
+        <button class="kb" id="toCtrl" style="flex:0 0 auto">⌨️ İmleç/klavye</button>
+      </div>
+    </div>
+    <!-- KONTROL MODU (gören yardımcı için): imleç + klavye -->
+    <div id="controlMode" style="flex:1;display:none;flex-direction:column">
+      <button id="voiceBtn" style="margin:14px;padding:18px;font-size:20px;font-weight:700;border:0;border-radius:16px;background:#e23b3b;color:#fff">🎤 Konuş</button>
+      <div id="touch"><div class="h">Parmağını buraya sürükle →<br>imleç TV'de hareket eder.<br><br>Tek dokunuş = tıkla</div></div>
+      <div id="typeRow" style="display:none;padding:0 14px 10px;gap:8px;flex-direction:column">
+        <textarea id="typeBox" rows="2" placeholder="Buraya yaz veya linki yapıştır…" style="width:100%;font-size:16px;padding:12px;border-radius:10px;border:2px solid var(--line);background:#0c0d12;color:var(--ink);resize:none"></textarea>
+        <div style="display:flex;gap:8px">
+          <button class="kb primary" id="sendBox" style="flex:2">⬆️ TV'ye gönder</button>
+          <button class="kb" id="pasteBox" style="flex:1">📋 Yapıştır</button>
+          <button class="kb" id="clearBox" style="flex:1">temizle</button>
+        </div>
+      </div>
+      <div class="keys">
+        <button class="kb primary" id="kbBtn">⌨️ Yazı kutusu</button>
+        <button class="kb" id="enterBtn">⏎ git</button>
+        <button class="kb" id="backBtn">⌫ sil</button>
+        <button class="kb" id="toVoice">🎤 Sesli mod</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ----- helpers -----
+  const $=id=>document.getElementById(id);
+  const params=new URLSearchParams(location.search);
+  function show(el){el.classList.remove('hidden');el.style.display=(el.id==='phone')?'flex':'block';}
+
+  // 4-char code <-> peer id
+  const PREFIX='tvdesk-2026-';
+  function makeCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)];return s;}
+  // remember helpers (best-effort; localStorage + cookie backup for iOS PWA reliability)
+  function remember(k,v){
+    try{localStorage.setItem(k,v);}catch(e){}
+    try{document.cookie=k+'='+encodeURIComponent(v)+';path=/;max-age=31536000';}catch(e){}
+  }
+  function recall(k){
+    try{const v=localStorage.getItem(k);if(v)return v;}catch(e){}
+    try{const m=document.cookie.match('(^|;)\\s*'+k+'\\s*=\\s*([^;]+)');if(m)return decodeURIComponent(m[2]);}catch(e){}
+    return null;
+  }
+
+  // ===== HAFIZA (aile bireyi Arya) — en üstte tanımlı, her yerden erişilir =====
+  var brainHistory=[];
+  var familyMemory='';     // bu ailenin bilinen hafızası (metin)
+  var familyCode='';       // TV kodu = aile kodu (hafıza anahtarı)
+  function loadMemory(){
+    if(!familyCode) return;
+    fetch('/.netlify/functions/mem-get?code='+encodeURIComponent(familyCode))
+      .then(r=>r.json()).then(d=>{ familyMemory=(d&&d.text)?d.text:''; })
+      .catch(()=>{});
+  }
+  function saveMemory(items){
+    if(!familyCode || !items || !items.length) return;
+    familyMemory = (familyMemory ? familyMemory+'\n' : '') + items.join('\n');
+    fetch('/.netlify/functions/mem-save',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code:familyCode,items:items})}).catch(()=>{});
+  }
+
+  // ================= TV =================
+  function startTV(){
+    $('landing').classList.add('hidden');
+    show($('tv'));
+    // reuse the same code on this TV so the QR/code never changes between sessions
+    let code=recall('tvdesk_tv_code');
+    if(!code){ code=makeCode(); remember('tvdesk_tv_code',code); }
+    const peer=new Peer(PREFIX+code,{debug:1});
+    $('codeText').textContent=code;
+    familyCode=code;          // aile kodu = TV kodu (hafıza anahtarı)
+    loadMemory();             // bu ailenin bildiği her şeyi yükle
+    startNotePolling(code);   // uzaktan gelen notları dinle (Iğdır'daki TV)
+
+    // QR -> phone opens same url with ?go=phone&code=XXXX
+    const url=location.origin+location.pathname+'?go=phone&code='+code;
+    const qrImg=new Image();
+    qrImg.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
+    qrImg.width=220;qrImg.height=220;
+    $('qr').appendChild(qrImg);
+
+    peer.on('open',()=>{ $('tvStatus').textContent='hazır · kod '+code; });
+    peer.on('error',e=>{ $('tvStatus').textContent='hata: '+e.type; });
+
+    peer.on('connection',conn=>{
+      window.tvConn=conn;   // keep ref so TV can talk back to phone (voice feedback)
+      conn.on('open',()=>{
+        $('tvStatus').textContent='telefon bağlandı';
+        $('tvStatus').classList.add('on');
+        $('pairBox').style.display='none';
+        $('tvDesk').style.display='block';
+        try{ placeCursor(); }catch(e){}
+        setTimeout(function(){ try{ aryaGreeting(); }catch(e){ try{ tellPhone({t:'say',text:'Merhaba, ben Arya. Konuşmak için ekrana dokun.'}); }catch(e2){} } },800);
+      });
+      conn.on('data',d=>handleData(d));
+      conn.on('close',()=>{$('tvStatus').textContent='bağlantı koptu';$('tvStatus').classList.remove('on');});
+    });
+
+    // cursor logic
+    let cx=200,cy=200;
+    const cur=$('cur'),desk=$('tvDesk'),tiles=[...document.querySelectorAll('.tile')];
+    let text='';
+    let inBrowser=false;       // are we in the browser view?
+    let inYT=false;            // are we in the youtube view?
+    let inAnswer=false;        // are we showing a spoken AI answer?
+    let lastAnswer='';         // last AI answer text (for "oku/tekrar")
+    let urlText='';            // address bar text (browser)
+    let ytText='';             // address bar text (youtube)
+    let bvResultEls=[];        // web search result cards (cursor targets)
+    const bvTargets=[...document.querySelectorAll('#browserView [data-act]')];
+    const ytTargets=[...document.querySelectorAll('#ytView [data-yt]')];
+    function clamp(v,a,b){return v<a?a:v>b?b:v;}
+    // Find which of a set of targets sits under the cursor's real screen point.
+    // Uses elementFromPoint so it works regardless of TV scaling/zoom.
+    function targetUnderCursor(targetList){
+      const cr=cur.getBoundingClientRect();
+      const px=cr.left+2, py=cr.top+2;          // tip of the cursor arrow
+      let el=document.elementFromPoint(px,py);
+      while(el){
+        if(targetList.indexOf(el)!==-1) return el;
+        el=el.parentElement;
+      }
+      return null;
+    }
+    window.placeCursor=function(){
+      const r=desk.getBoundingClientRect();
+      cx=clamp(cx,0,r.width-4);cy=clamp(cy,0,r.height-4);
+      cur.style.left=cx+'px';cur.style.top=cy+'px';
+      if(inAnswer){ return; }
+      if(inBrowser){
+        const all=bvTargets.concat(bvResultEls);
+        const hit=targetUnderCursor(all);
+        bvTargets.forEach(t=>t.style.outline=(t===hit)?'2px solid var(--accent)':'none');
+        bvResultEls.forEach(t=>t.style.borderColor=(t===hit)?'var(--accent)':'var(--line)');
+      }else if(inYT){
+        const all=ytTargets.concat(ytResultEls);
+        const hit=targetUnderCursor(all);
+        ytTargets.forEach(t=>t.style.outline=(t===hit)?'2px solid var(--accent)':'none');
+        ytResultEls.forEach(t=>t.style.borderColor=(t===hit)?'var(--accent)':'var(--line)');
+      }else{
+        const hit=targetUnderCursor(tiles);
+        tiles.forEach(t=>t.classList.toggle('hot',t===hit));
+      }
+    };
+    // ---- YouTube helpers ----
+    function ytId(s){
+      s=s.trim();
+      let m=s.match(/[?&]v=([A-Za-z0-9_-]{11})/); if(m)return m[1];
+      m=s.match(/youtu\.be\/([A-Za-z0-9_-]{11})/); if(m)return m[1];
+      m=s.match(/embed\/([A-Za-z0-9_-]{11})/); if(m)return m[1];
+      m=s.match(/shorts\/([A-Za-z0-9_-]{11})/); if(m)return m[1];
+      if(/^[A-Za-z0-9_-]{11}$/.test(s))return s; // raw id
+      return null;
+    }
+    const YT_KEY='AIzaSyBwgQZswSCZPVJzWWac-EowZQlPJupobgg';
+    let ytResultEls=[];   // clickable result tiles (cursor targets)
+    function openYT(){
+      inYT=true; ytText=''; inAnswer=false;
+      if($('answerView')) $('answerView').style.display='none';
+      var v=$('ytView');
+      v.style.display='flex';
+      v.style.zIndex='40';
+      $('ytUrl').textContent='video adı yaz: ör. "matematik konu anlatımı"…';
+      $('ytFrame').style.display='none';
+      $('ytResults').style.display='none';
+      $('ytResults').innerHTML='';
+      ytResultEls=[];
+      $('ytMsg').style.display='flex';
+      $('ytFrame').src='about:blank';
+      placeCursor();
+    }
+    function closeYT(){
+      inYT=false;
+      $('ytFrame').src='about:blank';   // stop the video / sound
+      $('ytView').style.display='none';
+      placeCursor();
+    }
+    function playVideo(id){
+      $('ytResults').style.display='none';
+      $('ytMsg').style.display='none';
+      $('ytFrame').style.display='block';
+      $('ytFrame').src='https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&rel=0&enablejsapi=1&playsinline=1';
+    }
+    // YouTube oynatıcıya komut (durdur/oynat) — postMessage ile
+    function ytCmd(func){
+      try{ var f=$('ytFrame'); if(f&&f.contentWindow){ f.contentWindow.postMessage(JSON.stringify({event:'command',func:func,args:[]}),'*'); } }catch(e){}
+    }
+    function showResults(items){
+      const box=$('ytResults');
+      box.innerHTML=''; ytResultEls=[];
+      items.forEach(it=>{
+        const id=it.id.videoId; if(!id)return;
+        const t=it.snippet.title, thumb=it.snippet.thumbnails.medium.url, ch=it.snippet.channelTitle;
+        const card=document.createElement('div');
+        card.className='ytcard'; card.dataset.vid=id;
+        card.style.cssText='cursor:pointer;border:2px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)';
+        card.innerHTML='<img src="'+thumb+'" style="width:100%;display:block"><div style="padding:8px 10px;font-size:13px;line-height:1.4;color:var(--ink)">'+t+'<div style="color:var(--dim);font-size:11px;margin-top:4px">'+ch+'</div></div>';
+        box.appendChild(card); ytResultEls.push(card);
+      });
+      $('ytMsg').style.display=items.length?'none':'flex';
+      if(!items.length){$('ytMsg').innerHTML='Sonuç bulunamadı. Başka kelimeler dene.';}
+      $('ytFrame').style.display='none';
+      box.style.display='grid';
+      placeCursor();
+    }
+    function playYT(){
+      const q=ytText.trim();
+      if(!q){ $('ytMsg').innerHTML='Bir video adı yaz, sonra "Ara"ya bas.'; $('ytMsg').style.display='flex'; return; }
+      // Pasted a real link? play it directly.
+      const id=ytId(q);
+      if(id){ playVideo(id); return; }
+      // Otherwise: real YouTube search via Data API.
+      $('ytMsg').innerHTML='Aranıyor…'; $('ytMsg').style.display='flex';
+      $('ytResults').style.display='none'; $('ytFrame').style.display='none';
+      const url='https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q='+encodeURIComponent(q)+'&key='+YT_KEY;
+      fetch(url).then(r=>r.json()).then(data=>{
+        if(data.error){ $('ytMsg').innerHTML='Arama hatası: '+(data.error.message||'bilinmeyen')+'<br>(API anahtarı / kota sorunu olabilir.)'; return; }
+        showResults(data.items||[]);
+      }).catch(e=>{ $('ytMsg').innerHTML='Bağlantı hatası: '+e.message; });
+    }
+    // helper: TV -> phone message (for spoken confirmation)
+    let lastSpoken='';
+    const HELP_TEXT='Şöyle kullanabilirsin. Bir şarkı veya video için adını söyle, mesela Tarkan şarkısı. Bir şey öğrenmek için soru sor, mesela fotosentez nedir. Sonuçlar gelince numarasını söyle, mesela birinci ya da üçüncü. Açılan sayfayı baştan dinlemek için oku de. Bir sonrakini dinlemek için sonraki, geri için bir önceki de. Videoyu durdurmak için durdur, devam etmek için devam et de. Konuşmamı kesmek için sus de. Ana ekrana dönmek için geri de.';
+    function faceMood(mood){
+      // mood: 'idle' | 'listen' | 'talk' | 'happy'
+      try{
+        const w=$('faceWrap'); if(!w) return;
+        w.classList.remove('listen','talk','happy');
+        if(mood==='listen') w.classList.add('listen');
+        else if(mood==='talk') w.classList.add('talk');
+        else if(mood==='happy') w.classList.add('happy');
+      }catch(e){}
+    }
+    window.faceMood=faceMood;
+    function aryaFaceSpeak(text){
+      try{
+        const w=$('faceWrap'), s=$('aryaSays');
+        if(s && text){ s.textContent=text; s.classList.add('live'); }
+        if(w){
+          // selamlama/olumlu kısa cümlelerde "mutlu" yüz, sonra konuşma
+          const happy=/(merhaba|günaydın|iyi akşam|iyi gece|hoş geldin|seni gördüğüme|sevindim|tebrik|harika|güzel|aferin|çok iyi)/i.test(text||'');
+          w.classList.remove('listen');
+          w.classList.add('talk');
+          if(happy) w.classList.add('happy');
+          clearTimeout(window._faceT);
+          const ms=Math.min(15000, Math.max(1800, (text? text.split(/\s+/).length:6)*420));
+          window._faceT=setTimeout(function(){ w.classList.remove('talk'); /* mutlu ifade biraz daha kalsın */ setTimeout(function(){ w.classList.remove('happy'); },1200); },ms);
+        }
+      }catch(e){}
+    }
+    function aryaFaceStop(){ try{ const w=$('faceWrap'); if(w){ clearTimeout(window._faceT); w.classList.remove('talk'); } }catch(e){} }
+    function tellPhone(o){
+      if(o&&o.t==='say'&&o.text){
+        lastSpoken=o.text;
+        aryaFaceSpeak(o.text);          // yüz canlansın
+        try{ speak(o.text); }catch(e){}  // SES TV'DEN çıksın (telefon sadece mikrofon)
+        return;                          // telefona ses gönderme
+      }
+      if(o&&o.t==='stop'){ aryaFaceStop(); try{ window.speechSynthesis.cancel(); }catch(e){} }
+      if(window.tvConn&&window.tvConn.open) window.tvConn.send(o);
+    }
+    let voiceResults=[];   // last search results
+    let voiceIdx=0;        // which one is playing
+    let webItems=[];       // last WEB search results (Brave)
+    let webIdx=0;          // which web result is focused/read
+    let siteOpen=false;    // is a real page open in the frame right now?
+    let lastOpenUrl='';    // the URL currently open in the frame
+    // VOICE: search YouTube, auto-play best hit, and tell the phone its title to speak aloud.
+    function voicePlay(spoken){
+      let q=(spoken||'').trim();
+      if(!q) return;
+      const low=q.toLocaleLowerCase('tr');
+      // ---- GENEL KOMUTLAR ----
+      // yardım / ne yapabilirsin
+      if(/(yardım|ne yapabilir|komutlar|nasıl kullan|sen ne yapar)/.test(low)){
+        tellPhone({t:'say',text:HELP_TEXT}); return;
+      }
+      // tekrar et / ne dedin
+      if(/(tekrar et|ne dedin|tekrarla|bir daha söyle|son(u)? tekrar)/.test(low)){
+        if(lastSpoken) tellPhone({t:'say',text:lastSpoken}); else tellPhone({t:'say',text:'Söyleyecek bir şey yok'});
+        return;
+      }
+      // sus / konuşmayı kes (okumayı durdur)
+      if(/(\bsus\b|sustur|sessiz ol|konuşmayı kes|kes konuşmayı|dinlemek istemiyorum|dur konuşma)/.test(low)){
+        tellPhone({t:'stop'}); return;
+      }
+      // video oynuyorsa: durdur / devam
+      if(inYT){
+        if(/(durdur|duraklat|beklet|\bdur\b)/.test(low)){ ytCmd('pauseVideo'); tellPhone({t:'say',text:'Durdurdum. Devam etmek için devam et de.'}); return; }
+        if(/(devam|oynat|başlat|\bçal\b)/.test(low)){ ytCmd('playVideo'); tellPhone({t:'say',text:'Oynatıyorum'}); return; }
+      }
+      // (video dışındaysa) "dur" = konuşmayı kes
+      if(!inYT && /\bdur\b/.test(low)){ tellPhone({t:'stop'}); return; }
+      // cevap ekranındayken "oku/tekrar" -> cevabı tekrar oku
+      if(inAnswer && /(oku|tekrar|söyle|anlat)/.test(low)){
+        if(lastAnswer) tellPhone({t:'say',text:lastAnswer}); return;
+      }
+      // ---- voice commands first ----
+      if(/(kapat|geri|ana ekran|ana sayfa|çık|kapan|eve dön)/.test(low)){
+        if(inAnswer){ closeAnswer(); }
+        else if(inBrowser){ closeBrowser(); }
+        else if(inYT){ closeYT(); }
+        tellPhone({t:'say',text:'Ana ekran. Ne yapmak istersin?'}); return;
+      }
+      // ---- TARAYICIDA: sesle oku / sonuç seç ----
+      if(inBrowser){
+        // "oku / anlat / söyle" -> açık sayfa varsa İÇERİĞİNİ oku, yoksa seçili sonucu oku
+        if(/(oku|okur musun|tekrar oku|söyle|seslen|anlat)/.test(low)){
+          if(siteOpen && lastOpenUrl){ webReadPage(lastOpenUrl); return; }
+          if(webItems.length){ readWebResult(webIdx||0); return; }
+        }
+        // "birinci / 3 / üçüncüyü aç / sonuncu / bunu aç" -> o sonucu aç (yeni bir arama değilse)
+        if(webItems.length && !/(nedir|kimdir|ne demek|nasıl|ne zaman|nerede|araştır)/.test(low)){
+          if(/(sonuncu|en alttaki|en sondaki)/.test(low)){ openWebResult(webItems.length-1); return; }
+          if(/^aç$|bunu aç|onu aç|şunu aç|aç bakalım|aç şunu/.test(low)){ openWebResult(webIdx||0); return; }
+          const n=ordIndex(low);
+          if(n>=1 && n<=webItems.length){ openWebResult(n-1); return; }
+        }
+      }
+      if(/(başka|sıradaki|sonraki|diğer|değiştir|bir sonraki|öteki|atla|geç)/.test(low)){
+        if(inBrowser && webItems.length){
+          webIdx=(webIdx+1)%webItems.length;   // sonraki sonucu sesli oku
+          readWebResult(webIdx); return;
+        }
+        if(voiceResults.length>1){
+          voiceIdx = (voiceIdx+1) % voiceResults.length;   // wrap around, always moves
+          const it=voiceResults[voiceIdx];
+          playVideo(it.id.videoId);
+          tellPhone({t:'say',text:it.snippet.title+' açılıyor'});
+        } else {
+          tellPhone({t:'say',text:'Başka sonuç yok, yeni bir şey söyleyin'});
+        }
+        return;
+      }
+      // ---- ÖNCEKİ: bir önceki sonuç/video ----
+      if(/(önceki|bir önceki|öncesi|geri al)/.test(low)){
+        if(inBrowser && webItems.length){
+          webIdx=(webIdx-1+webItems.length)%webItems.length;
+          readWebResult(webIdx); return;
+        }
+        if(voiceResults.length>1){
+          voiceIdx=(voiceIdx-1+voiceResults.length)%voiceResults.length;
+          const it=voiceResults[voiceIdx];
+          playVideo(it.id.videoId);
+          tellPhone({t:'say',text:it.snippet.title+' açılıyor'});
+        } else {
+          tellPhone({t:'say',text:'Önceki sonuç yok'});
+        }
+        return;
+      }
+      // ---- Buraya kadar bir komut değilse: BEYNE sor (anla, cevapla / video / arama) ----
+      askBrain(q);
+    }
+    // ===== KONUŞAN BEYİN (Gemini) =====
+    function saatSelami(){
+      const s=new Date().getHours();
+      if(s>=5&&s<11) return 'Günaydın';
+      if(s>=11&&s<18) return 'Merhaba';
+      if(s>=18&&s<23) return 'İyi akşamlar';
+      return 'İyi geceler';
+    }
+    function aryaGreeting(){
+      const selam=saatSelami();
+      const mem=(typeof familyMemory==='string')?familyMemory:'';
+      // Hafıza varsa Arya kendi gündemiyle açılsın; yoksa sade ama sıcak karşılasın.
+      if(mem && mem.trim().length>3){
+        const prompt='(Bu bir karşılama anı. Sen Arya\'sın, bu ailenin TV\'sindeki bir ferdisin. '
+          +'Aşağıdaki hafızaya bak; bugünün tarihine ve bu bilgilere dayanarak kullanıcıyı '+selam.toLowerCase()
+          +' diyerek SICAK ve KISA karşıla. Mümkünse hatırladığın kişisel bir şeye nazikçe değin '
+          +'(örn. bir doğum günü bugünse, geçmiş bir olayın sonucunu merak etmek, ya da uzun süredir konuşulmamış birini hatırlatmak). '
+          +'Tek-iki cümle, doğal konuşma. Soru sorman gerekmiyor, sohbeti sen aç.)';
+        fetch('/.netlify/functions/brain?q='+encodeURIComponent(prompt)+'&mem='+encodeURIComponent(mem.slice(-1500)))
+          .then(r=>r.json())
+          .then(d=>{ const t=(d&&d.text)?d.text:(selam+'. Seni gördüğüme sevindim, ben Arya.'); tellPhone({t:'say',text:t}); })
+          .catch(()=>{ tellPhone({t:'say',text:selam+'. Ben Arya. Konuşmak için ekrana dokun, bir şey sor.'}); });
+      } else {
+        tellPhone({t:'say',text:selam+'. Ben Arya, artık bu evin bir ferdiyim. Benimle konuşmak için ekrandaki kırmızı alana dokun ve söyle yeter.'});
+      }
+    }
+    function askBrain(q){
+      const h=brainHistory.slice(-4).join(' | ');
+      const url='/.netlify/functions/brain?q='+encodeURIComponent(q)+'&h='+encodeURIComponent(h)+'&mem='+encodeURIComponent(familyMemory.slice(-1500));
+      fetch(url)
+        .then(r=>r.json())
+        .then(d=>{
+          brainHistory.push('Kullanıcı: '+q);
+          if(d && Array.isArray(d.learn) && d.learn.length) saveMemory(d.learn);
+          if(d && d.action==='video'){ brainHistory.push('(video açıldı)'); playFirstVideo(d.query||q); }
+          else if(d && d.action==='search'){ brainHistory.push('(internette arandı)'); webSearchFromVoice(d.query||q); }
+          else { const ans=(d&&d.text)?d.text:'Bunu tam anlayamadım, tekrar söyler misin?'; brainHistory.push('Sen: '+ans); openAnswer(ans); tellPhone({t:'say',text:ans}); }
+          if(brainHistory.length>8) brainHistory=brainHistory.slice(-8);
+        })
+        .catch(()=>{ tellPhone({t:'say',text:'Şu an cevap veremedim, az sonra tekrar dene.'}); });
+    }
+    // YouTube'da ara, ilk videoyu aç
+    function playFirstVideo(q){
+      if(!inYT){ closeBrowser&&closeBrowser(); openYT(); }
+      ytText=q; $('ytUrl').textContent=q;
+      $('ytResults').style.display='none'; $('ytFrame').style.display='none';
+      $('ytMsg').innerHTML='🔎 "'+q+'" aranıyor…'; $('ytMsg').style.display='flex';
+      const url='https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q='+encodeURIComponent(q)+'&key='+YT_KEY;
+      fetch(url).then(r=>r.json()).then(data=>{
+        if(data.error){ $('ytMsg').innerHTML='Arama hatası'; tellPhone({t:'say',text:'Arama yapılamadı'}); return; }
+        voiceResults=(data.items||[]).filter(it=>it.id&&it.id.videoId);
+        voiceIdx=0;
+        if(voiceResults.length){
+          const it=voiceResults[0];
+          playVideo(it.id.videoId);
+          tellPhone({t:'say',text:it.snippet.title+' açılıyor'});
+        } else {
+          $('ytMsg').innerHTML='"'+q+'" için sonuç bulunamadı.'; $('ytMsg').style.display='flex';
+          tellPhone({t:'say',text:q+' için bir şey bulamadım, tekrar söyleyin'});
+        }
+      }).catch(e=>{ $('ytMsg').innerHTML='Bağlantı hatası'; tellPhone({t:'say',text:'Bağlantı hatası'}); });
+    }
+    // Web'de ara (sonuç listesi göster)
+    function webSearchFromVoice(q){
+      if(!inBrowser){ closeYT&&closeYT(); openBrowser(); }
+      urlText=q; $('bvUrl').textContent=q;
+      tellPhone({t:'say',text:q+' için internette bakıyorum'});
+      webSearch(q);
+    }
+    // AI cevabını büyük yazıyla ekrana koy (gören/az gören için), telefon zaten okur
+    function openAnswer(text){
+      inAnswer=false; lastAnswer=text;
+      // Cevap ekranını AÇMA — yüz hep görünsün, cevap yüzün altındaki yazıda kalsın.
+      try{ if($('answerView')) $('answerView').style.display='none'; }catch(e){}
+      // (aryaSays zaten tellPhone->aryaFaceSpeak ile doluyor; burada ekstra bir şey gerekmez)
+    }
+    function closeAnswer(){ inAnswer=false; $('answerView').style.display='none'; placeCursor(); }
+    function openBrowser(){
+      inBrowser=true; urlText=''; siteOpen=false; lastOpenUrl=''; inAnswer=false;
+      if($('answerView')) $('answerView').style.display='none';
+      $('browserView').style.display='flex';
+      $('bvUrl').textContent='adres VEYA aranacak kelime yaz…';
+      $('bvMsg').style.display='flex';
+      $('bvMsg').innerHTML='Adres yaz (ör. <b>tr.wikipedia.org</b>) ya da aramak istediğin kelimeyi yaz (ör. <b>hava durumu</b>), "Git"e bas.';
+      $('bvFrame').style.display='none';
+      $('bvFrame').src='about:blank';
+      if($('bvResults')){ $('bvResults').style.display='none'; $('bvResults').innerHTML=''; }
+      bvResultEls=[];
+      placeCursor();
+    }
+    function closeBrowser(){
+      inBrowser=false; siteOpen=false;
+      $('browserView').style.display='none';
+      placeCursor();
+    }
+    const BRAVE_KEY='BSAkdx_4dMg9BRkdc76TaKDtSTJjjCV';
+    function openSiteInFrame(u){
+      siteOpen=true; lastOpenUrl=u;
+      $('bvResults').style.display='none';
+      $('bvMsg').style.display='none';
+      $('bvFrame').style.display='block';
+      $('bvFrame').src=u;
+      clearTimeout(window._bvTimer);
+      window._bvTimer=setTimeout(()=>{
+        try{ const d=$('bvFrame').contentDocument; if(!d){throw 0;} }
+        catch(e){
+          $('bvMsg').innerHTML='Bu site TV içinde açılmayı engelliyor olabilir (bazı büyük siteler bunu yapar).<br>Geri dönmek için "Ana ekran"a bas.';
+          $('bvMsg').style.display='flex';
+          tellPhone({t:'say',text:'Bu site TV içinde açılmıyor. Başka bir sonuç söyleyebilir ya da sonraki diyebilirsin.'});
+        }
+      },2500);
+    }
+    function showWebResults(items){
+      const box=$('bvResults'); box.innerHTML=''; bvResultEls=[];
+      items.forEach((it,i)=>{
+        const card=document.createElement('div');
+        card.className='webcard'; card.dataset.url=it.url;
+        card.style.cssText='cursor:pointer;border:2px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--panel)';
+        card.innerHTML='<div style="font-size:22px;color:#7da3ff;line-height:1.35"><b style="color:#ff6a3d">'+(i+1)+'.</b> '+it.title+'</div>'
+          +'<div style="font-size:13px;color:var(--accent2);margin:5px 0">'+it.url+'</div>'
+          +'<div style="font-size:16px;color:var(--dim);line-height:1.55">'+(it.description||'')+'</div>';
+        box.appendChild(card); bvResultEls.push(card);
+      });
+      webItems = items || []; webIdx = 0; siteOpen=false;
+      $('bvFrame').style.display='none';
+      $('bvMsg').style.display=items.length?'none':'flex';
+      if(!items.length)$('bvMsg').innerHTML='Sonuç bulunamadı. Başka kelime dene.';
+      box.style.display='flex';
+      placeCursor();
+      // ilk sonucu vurgula + sesli oku (görme engelli / okuma bilmeyen için)
+      if(items.length){
+        if(bvResultEls[0]) bvResultEls[0].style.outline='3px solid #ff6a3d';
+        tellPhone({t:'say',text: items.length+' sonuç buldum. Birincisi: '+(items[0].title||'')+'. Açmak için numarasını söyle, dinlemek için "sonraki" de.'});
+      }
+    }
+    // Sesle bir sonucu AÇ (siteyi TV'de göster)
+    function openWebResult(i){
+      const it=webItems[i]; if(!it) return;
+      webIdx=i; urlText=it.url;
+      if($('bvUrl')) $('bvUrl').textContent=it.url;
+      bvResultEls.forEach((c,k)=>{ c.style.outline=(k===i)?'3px solid #ff6a3d':''; });
+      openSiteInFrame(it.url);
+      tellPhone({t:'say',text:(i+1)+'. sonucu açıyorum. '+(it.title||'')});
+    }
+    // Bir sonucu sesli OKU (açmadan, başlık + açıklama)
+    function readWebResult(i){
+      const it=webItems[i]; if(!it) return; webIdx=i;
+      bvResultEls.forEach((c,k)=>{ c.style.outline=(k===i)?'3px solid #ff6a3d':''; });
+      if(bvResultEls[i] && bvResultEls[i].scrollIntoView) bvResultEls[i].scrollIntoView({block:'center'});
+      tellPhone({t:'say',text:(i+1)+'. sonuç. '+(it.title||'')+'. '+(it.description||'')});
+    }
+    // Açık sayfanın metnini sunucudan çek, telefona sesli okut (görme engelli / okuma bilmeyen için)
+    function webReadPage(url){
+      tellPhone({t:'say',text:'Sayfayı okuyorum, bir saniye'});
+      fetch('/.netlify/functions/read?u='+encodeURIComponent(url))
+        .then(r=>{ if(!r.ok) throw 0; return r.json(); })
+        .then(d=>{
+          if(d && d.text && d.text.trim().length>20){ tellPhone({t:'say',text:d.text}); }
+          else { tellPhone({t:'say',text:'Bu sayfanın yazısını okuyamadım. Başka bir sonuç deneyebilirsin.'}); }
+        })
+        .catch(()=>tellPhone({t:'say',text:'Sayfa okuma henüz hazır değil ya da bu sayfa okunamadı.'}));
+    }
+    // Söylenen sözden sıra numarası çıkar (1-10), yoksa 0
+    function ordIndex(low){
+      const map=[['ilk',1],['birinci',1],['ikinci',2],['üçüncü',3],['ucuncu',3],['dördüncü',4],['dorduncu',4],['beşinci',5],['besinci',5],['altıncı',6],['altinci',6],['yedinci',7],['sekizinci',8],['dokuzuncu',9],['onuncu',10]];
+      for(let k=0;k<map.length;k++){ if(low.indexOf(map[k][0])>=0) return map[k][1]; }
+      const m=low.match(/(?:^|\s)(10|[1-9])(?:\s|\.|$)/);
+      if(m) return parseInt(m[1],10);
+      return 0;
+    }
+    function webSearch(q){
+      $('bvFrame').style.display='none'; $('bvResults').style.display='none';
+      $('bvMsg').innerHTML='Aranıyor…'; $('bvMsg').style.display='flex';
+      const url='/.netlify/functions/search?q='+encodeURIComponent(q);
+      fetch(url)
+        .then(r=>{ if(!r.ok) throw new Error('proxy yok'); return r.json(); })
+        .then(data=>{
+          if(data && data.web && data.web.results){ showWebResults(data.web.results.slice(0,10)); }
+          else if(data && data.error){ $('bvMsg').innerHTML='Arama hatası: '+(data.error.detail||data.error.code||'bilinmeyen'); }
+          else { $('bvMsg').innerHTML='Sonuç bulunamadı. Başka kelime dene.'; }
+        }).catch(e=>{ $('bvMsg').innerHTML='Web araması henüz hazır değil.<br>Şimdilik adres yazıp gidebilir ya da video açabilirsin.'; });
+    }
+    function navigate(){
+      let u=urlText.trim();
+      if(!u){return;}
+      // YouTube links -> player
+      if(/youtube\.com|youtu\.be/i.test(u)){
+        closeBrowser(); openYT(); ytText=u; $('ytUrl').textContent=u; playYT(); return;
+      }
+      // Real website address (has a dot, no spaces) -> open directly
+      if(/\./.test(u) && !/\s/.test(u)){
+        if(!/^https?:\/\//i.test(u)) u='https://'+u;
+        openSiteInFrame(u); return;
+      }
+      // Otherwise -> real web search via Brave
+      webSearch(u);
+    }
+    window.handleData=function(d){
+      if(d.t==='voice'){ try{ faceMood('listen'); var ss=$('aryaSays'); if(ss) ss.textContent='Seni dinliyorum…'; }catch(e){} voicePlay(d.q); return; }   // ninem konuştu -> ara + ilk videoyu aç
+      if(d.t==='move'){cx+=d.dx;cy+=d.dy;placeCursor();}
+      else if(d.t==='click'){
+        cur.classList.remove('click');void cur.offsetWidth;cur.classList.add('click');
+        if(inAnswer){ closeAnswer(); return; }
+        if(inBrowser){
+          const cardHit=targetUnderCursor(bvResultEls);
+          if(cardHit){ urlText=cardHit.dataset.url; openSiteInFrame(cardHit.dataset.url); return; }
+          const hit=targetUnderCursor(bvTargets);
+          if(hit){const act=hit.dataset.act;
+            if(act==='home')closeBrowser();
+            else if(act==='go')navigate();}
+        }else if(inYT){
+          // result card under cursor?
+          const cardHit=targetUnderCursor(ytResultEls);
+          if(cardHit){ playVideo(cardHit.dataset.vid); return; }
+          const hit=targetUnderCursor(ytTargets);
+          if(hit){const act=hit.dataset.yt;
+            if(act==='home')closeYT();
+            else if(act==='go')playYT();}
+        }else{
+          const hot=tiles.find(t=>t.classList.contains('hot'));
+          if(hot){
+            hot.style.boxShadow='0 0 0 3px var(--accent2)';setTimeout(()=>hot.style.boxShadow='',350);
+            const n=(hot.dataset.n||'').trim();
+            if(n==='Tarayıcı'){ openBrowser(); }
+            else if(n==='Video'){ openYT(); }
+            else if(n==='Ödev'){ /* sonraki adım */ }
+            else if(n==='PDF'){ /* sonraki adım */ }
+          }
+        }
+      }
+      else if(d.t==='key'){
+        if(inBrowser){
+          if(d.k==='back')urlText=urlText.slice(0,-1);
+          else if(d.k==='space')urlText+=' ';
+          else if(d.k==='enter'){navigate();return;}
+          else urlText+=d.k;
+          $('bvUrl').textContent=urlText||'adres VEYA aranacak kelime yaz…';
+        }else if(inYT){
+          if(d.k==='back')ytText=ytText.slice(0,-1);
+          else if(d.k==='space')ytText+=' ';
+          else if(d.k==='enter'){playYT();return;}
+          else ytText+=d.k;
+          $('ytUrl').textContent=ytText||'YouTube linki yapıştır: telefondan klavye…';
+        }else{
+          if(d.k==='back')text=text.slice(0,-1);
+          else if(d.k==='space')text+=' ';
+          else if(d.k==='enter')text+='\n';
+          else text+=d.k;
+          $('typed').textContent=text;
+        }
+      }
+    };
+    window.addEventListener('resize',placeCursor);
+  }
+
+  // ================= PHONE =================
+  // Speak text aloud in Turkish (for blind/low-vision and illiterate users)
+  // iOS Safari long-text bug: uzun cümleler hiç başlamayabiliyor -> kısa parçalara bölüp sırayla okuyoruz.
+  function pickAryaVoice(){
+    try{
+      const vs=window.speechSynthesis.getVoices()||[];
+      const tr=vs.filter(function(v){ return /tr(-|_)?/i.test(v.lang) || /turk/i.test(v.name); });
+      const pool=tr.length?tr:vs;
+      // kadın sesi adaylarını öne al
+      const femHint=/(kadın|female|woman|yelda|filiz|seda|aylin|elif|google türkçe|google turkish|microsoft.*(emel|tolga is erkek)|emel|zira|samantha)/i;
+      let pick=pool.find(function(v){ return femHint.test(v.name); });
+      // erkek olduğu bilinenleri ele (Tolga = Windows TR erkek)
+      if(!pick){ pick=pool.find(function(v){ return !/(tolga|erkek|male|man)/i.test(v.name); }); }
+      if(!pick) pick=pool[0];
+      window._aryaVoice=pick||null;
+    }catch(e){ window._aryaVoice=null; }
+  }
+  try{ if('speechSynthesis' in window){ window.speechSynthesis.onvoiceschanged=pickAryaVoice; setTimeout(pickAryaVoice,300); } }catch(e){}
+  function speak(text){
+    try{
+      if(!('speechSynthesis' in window) || !text) return;
+      const synth=window.speechSynthesis;
+      try{ window._stopListen && window._stopListen(); }catch(e){}   // Arya konuşurken kendini duymasın
+      window._speaking=true;
+      synth.cancel();
+      let s=(''+text).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+      const parts=[];
+      while(s.length>140){
+        let cut=s.lastIndexOf('.',140);
+        if(cut<60) cut=s.lastIndexOf(' ',140);
+        if(cut<60) cut=140;
+        parts.push(s.slice(0,cut+1).trim());
+        s=s.slice(cut+1).trim();
+      }
+      if(s) parts.push(s);
+      let i=0;
+      const finish=()=>{
+        // Arya bitti ama TV sesi ortamda yankılanıyor olabilir; mikrofonu hemen açma, biraz bekle.
+        try{ clearTimeout(window._micResumeT); }catch(e){}
+        window._micResumeT=setTimeout(function(){ window._speaking=false; try{ window._startHands && window._startHands(); }catch(e){} }, 1200);
+      };
+      const next=()=>{
+        if(i>=parts.length){ finish(); return; }
+        const u=new SpeechSynthesisUtterance(parts[i++]);
+        u.lang='tr-TR'; u.rate=1; u.pitch=1.05;
+        try{ if(!window._aryaVoice) pickAryaVoice(); if(window._aryaVoice) u.voice=window._aryaVoice; }catch(e){}
+        u.onend=next; u.onerror=next;
+        try{ synth.resume(); }catch(e){}
+        synth.speak(u);
+      };
+      next();
+    }catch(e){ window._speaking=false; }
+  }
+
+  // ---- UZAKTAN NOT: TV tarafı (gelen notları sesli okur) ----
+  function noteMsg(n){
+    const who=(n.sender&&n.sender.trim())?n.sender.trim():'Sevdiklerin';
+    return who+' diyor ki: '+n.text;
+  }
+  function startNotePolling(code){
+    const key='tvdesk_lastnote_'+code;
+    let last=parseInt(recall(key)||'0',10)||0;
+    async function tick(){
+      try{
+        const r=await fetch('/.netlify/functions/note-get?code='+encodeURIComponent(code)+'&since='+last);
+        if(!r.ok) return;
+        const arr=await r.json();
+        if(Array.isArray(arr)&&arr.length){
+          const msgs=[];
+          for(const n of arr){ msgs.push(noteMsg(n)); if(n.id>last) last=n.id; }
+          remember(key,String(last));
+          // ekranda göster
+          const b=$('noteBanner');
+          if(b){ b.textContent='💬 '+msgs[msgs.length-1]; b.style.display='block'; }
+          // TV hoparlöründen sesli oku
+          try{ speak('Yeni mesajın var. '+msgs.join('. Ayrıca, ')); }catch(e){}
+          // telefon de bağlıysa ona da söylet
+          try{ if(window.tvConn) window.tvConn.send({t:'say',text:'Yeni mesajın var. '+msgs.join('. Ayrıca, ')}); }catch(e){}
+        }
+      }catch(e){}
+    }
+    tick();
+    setInterval(tick,20000);
+  }
+
+  // ---- UZAKTAN NOT: gönderen taraf (Dubai) ----
+  function startNoteSend(){
+    $('landing').classList.add('hidden');
+    show($('noteSend'));
+    const codeEl=$('nsCode'), fromEl=$('nsFrom'), textEl=$('nsText'), st=$('nsStatus');
+    const sc=recall('tvdesk_send_code'); if(sc) codeEl.value=sc;
+    const sf=recall('tvdesk_send_from'); if(sf) fromEl.value=sf;
+    $('nsBack').onclick=()=>{ location.href=location.origin+location.pathname; };
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    $('nsMic').onclick=()=>{
+      if(!SR){ st.textContent='Bu cihaz sesli yazmayı desteklemiyor, elle yaz.'; return; }
+      const rec=new SR(); rec.lang='tr-TR'; rec.interimResults=false; rec.maxAlternatives=1;
+      st.textContent='🔴 Dinliyorum…';
+      rec.onresult=e=>{ const s=e.results[0][0].transcript; textEl.value=(textEl.value?textEl.value+' ':'')+s; st.textContent=''; };
+      rec.onerror=()=>{ st.textContent='Anlayamadım, tekrar dene.'; };
+      rec.onend=()=>{ if(st.textContent==='🔴 Dinliyorum…') st.textContent=''; };
+      try{ rec.start(); }catch(e){ st.textContent='Mikrofon başlatılamadı.'; }
+    };
+    $('nsSend').onclick=async()=>{
+      const code=(codeEl.value||'').trim().toUpperCase();
+      const text=(textEl.value||'').trim();
+      const from=(fromEl.value||'').trim();
+      if(!code){ st.textContent='Önce onun TV kodunu gir.'; codeEl.focus(); return; }
+      if(!text){ st.textContent='Bir not yaz ya da söyle.'; textEl.focus(); return; }
+      remember('tvdesk_send_code',code); remember('tvdesk_send_from',from);
+      st.textContent='Gönderiliyor…';
+      try{
+        const r=await fetch('/.netlify/functions/note-send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,text:text,from:from})});
+        if(r.ok){ st.textContent='✓ Gönderildi. Onun TV\'si açıkken Arya okuyacak.'; textEl.value=''; }
+        else { st.textContent='Gönderilemedi ('+r.status+'). Kodu ve ayarları kontrol et.'; }
+      }catch(e){ st.textContent='Bağlantı hatası, tekrar dene.'; }
+    };
+  }
+
+  function startPhone(prefill){
+    $('landing').classList.add('hidden');
+    show($('phone'));
+    let conn=null,peer=null;
+
+    // remember last TV code; prefer QR prefill, else last used
+    const lastCode=recall('tvdesk_phone_last');
+    const initial=(prefill||lastCode||'').toUpperCase();
+    if(initial){$('codeInput').value=initial;}
+
+    // one-tap reconnect button if we have a remembered code and no QR prefill
+    if(lastCode && !prefill){
+      const rc=document.createElement('button');
+      rc.className='bigbtn';
+      rc.style.background='var(--accent2)';
+      rc.textContent='⚡ Son TV\'ne bağlan ('+lastCode+')';
+      rc.onclick=()=>{$('codeInput').value=lastCode;connect();};
+      $('connectBtn').insertAdjacentElement('beforebegin',rc);
+    }
+
+    function connect(){
+      const code=($('codeInput').value||'').toUpperCase().trim();
+      if(code.length!==4){$('phErr').textContent='4 haneli kodu gir.';return;}
+      $('phErr').textContent='bağlanıyor…';
+      peer=new Peer({debug:1});
+      peer.on('open',()=>{
+        conn=peer.connect(PREFIX+code,{reliable:false});
+        conn.on('open',()=>{
+          remember('tvdesk_phone_last',code);   // remember for next time
+          $('phErr').textContent='';
+          $('phStatus').textContent='bağlı';$('phStatus').classList.add('on');
+          $('connectUI').style.display='none';
+          $('ctrlUI').style.display='flex';
+          setTimeout(function(){ try{ window._startHands && window._startHands(); }catch(e){} }, 1500);
+        });
+        conn.on('data',d=>{
+          // Ses artık TV'den geliyor; telefon sadece mikrofon. Burada konuşturma YOK, sadece durum göster.
+          if(d && d.t==='say' && d.text){ if($('voiceStatus'))$('voiceStatus').textContent='🔊 '+d.text.slice(0,60); }
+          else if(d && d.t==='stop'){ if($('voiceStatus'))$('voiceStatus').textContent='⏸️ durdu'; }
+        });
+        conn.on('error',()=>{$('phErr').textContent='bağlanamadı, kodu kontrol et.';});
+      });
+      peer.on('error',e=>{$('phErr').textContent='hata: '+e.type+' (kodu kontrol et / aynı Wi-Fi?)';});
+    }
+    function send(o){ if(conn&&conn.open)conn.send(o); }
+
+    $('connectBtn').onclick=connect;
+    $('codeInput').addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
+
+    // AUTO-CONNECT: opened via QR, OR app icon opened with a remembered code
+    if(prefill){ setTimeout(connect,400); }
+    else if(lastCode){ $('phErr').textContent='son TV\'ne bağlanılıyor…'; setTimeout(connect,400); }
+
+    // touchpad
+    const pad=$('touch');let last=null;
+    function s(x,y){last={x,y};}
+    function m(x,y){if(!last)return;send({t:'move',dx:(x-last.x),dy:(y-last.y)});last={x,y};}
+    function e(){last=null;}
+    pad.addEventListener('touchstart',ev=>{const t=ev.touches[0];s(t.clientX,t.clientY);downAt=Date.now();downP={x:t.clientX,y:t.clientY};ev.preventDefault();},{passive:false});
+    pad.addEventListener('touchmove',ev=>{const t=ev.touches[0];m(t.clientX,t.clientY);ev.preventDefault();},{passive:false});
+    let downAt=0,downP=null;
+    pad.addEventListener('touchend',ev=>{e();const t=ev.changedTouches[0];
+      const dt=Date.now()-downAt,dist=downP?Math.hypot(t.clientX-downP.x,t.clientY-downP.y):99;
+      if(dt<250&&dist<10){send({t:'click'});const r=document.createElement('div');r.className='rip';const pr=pad.getBoundingClientRect();r.style.left=(t.clientX-pr.left)+'px';r.style.top=(t.clientY-pr.top)+'px';pad.appendChild(r);setTimeout(()=>r.remove(),400);}
+    });
+    // mouse (for desktop testing)
+    pad.addEventListener('mousedown',ev=>{s(ev.clientX,ev.clientY);downAt=Date.now();downP={x:ev.clientX,y:ev.clientY};});
+    window.addEventListener('mousemove',ev=>m(ev.clientX,ev.clientY));
+    window.addEventListener('mouseup',ev=>{e();const dt=Date.now()-downAt,dist=downP?Math.hypot(ev.clientX-downP.x,ev.clientY-downP.y):99;if(dt<250&&dist<10)send({t:'click'});});
+
+    // ---- visible text box: type/paste, see it, then send to TV ----
+    const typeRow=$('typeRow'), typeBox=$('typeBox');
+    function sendText(str){ for(const ch of str){ if(ch==='\n')send({t:'key',k:'enter'}); else if(ch===' ')send({t:'key',k:'space'}); else send({t:'key',k:ch}); } }
+
+    $('kbBtn').onclick=()=>{
+      const open=typeRow.style.display!=='flex';
+      typeRow.style.display=open?'flex':'none';
+      if(open){ typeBox.focus(); }
+    };
+    $('sendBox').onclick=()=>{
+      const v=typeBox.value;
+      if(v){ sendText(v); }
+      typeBox.value='';
+    };
+    $('pasteBox').onclick=async()=>{
+      try{ const t=await navigator.clipboard.readText(); if(t){ typeBox.value+=t; typeBox.focus(); } }
+      catch(e){ /* clipboard blocked: user can long-press the box and Paste manually */ typeBox.focus(); }
+    };
+    $('clearBox').onclick=()=>{ typeBox.value=''; typeBox.focus(); };
+    // "git" = send current box then trigger enter (navigate/play on TV)
+    $('enterBtn').onclick=()=>{
+      const v=typeBox.value;
+      if(v){ sendText(v); typeBox.value=''; }
+      send({t:'key',k:'enter'});
+    };
+    $('backBtn').onclick=()=>send({t:'key',k:'back'});
+
+    // ---- SES: SADECE dokun-konuş (eller serbest kaldırıldı — takılma/çöp ses olmasın) ----
+    const voiceStatus=$('voiceStatus');
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    function setStatus(t){ if(voiceStatus) voiceStatus.textContent=t; }
+    if($('toCtrl')) $('toCtrl').onclick=()=>{ $('voiceMode').style.display='none'; $('controlMode').style.display='flex'; };
+    if($('toVoice')) $('toVoice').onclick=()=>{ $('controlMode').style.display='none'; $('voiceMode').style.display='flex'; };
+    window._startHands=function(){};   // eller serbest yok (uyumluluk için boş)
+    if(!SR){
+      setStatus('Bu telefon sesli komutu desteklemiyor. İmleç/klavye kullanabilirsin.');
+    } else {
+      let rec=null, listening=false;
+      function warmTTS(){ try{ window.speechSynthesis.resume(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); }catch(e){} }
+      function stopListen(){ try{ if(rec){ rec.onresult=null; rec.onend=null; rec.abort(); } }catch(e){} listening=false; }
+      window._stopListen=stopListen;   // Arya konuşurken mikrofonu kapat
+      function tapTalk(){
+        if(listening){ stopListen(); setStatus(''); return; }   // ikinci dokunuş durdurur
+        warmTTS();
+        try{ window.speechSynthesis.cancel(); window._speaking=false; }catch(e){}
+        rec=new SR(); rec.lang='tr-TR'; rec.interimResults=false; rec.maxAlternatives=1;
+        rec.onstart=()=>{ listening=true; setStatus('🔴 Dinliyorum… konuş'); };
+        rec.onresult=(e)=>{ let s=''; try{ s=e.results[e.results.length-1][0].transcript; }catch(_){}
+          if(s && s.trim()){ setStatus('Anladım: “'+s.trim()+'”'); send({t:'voice',q:s.trim()}); }
+          else { setStatus('Duyamadım, tekrar dokun ve konuş.'); }
+        };
+        rec.onerror=()=>{ setStatus('Duyamadım, tekrar dokun ve konuş.'); };
+        rec.onend=()=>{ listening=false; };
+        try{ rec.start(); }catch(e){ setStatus('Mikrofon başlamadı, tekrar dokun.'); }
+      }
+      if($('voiceBig')) $('voiceBig').onclick=tapTalk;
+      if($('voiceBtn')) $('voiceBtn').onclick=tapTalk;
+
+      // ====== ELLER SERBEST: "Arya" diye çağırınca uyanır ======
+      let hf=null, hfOn=false, hfArmed=false, hfRestart=null;
+      const WAKE=/\b(arya|aryam|aryacığım|arya'?ya)\b/i;
+      function hfStop(){
+        hfOn=false; hfArmed=false;
+        try{ if(hf){ hf.onresult=null; hf.onend=null; hf.onerror=null; hf.stop(); } }catch(e){}
+        try{ clearTimeout(hfRestart); }catch(e){}
+        setStatus('Eller serbest kapalı.');
+        const b=$('handsBtn'); if(b){ b.textContent='🖐️ Eller serbest: Kapalı'; b.style.background=''; b.style.color=''; }
+      }
+      function hfBegin(){
+        if(!SR){ setStatus('Bu telefon sesli komutu desteklemiyor.'); return; }
+        warmTTS();
+        hfOn=true; hfArmed=true;
+        const b=$('handsBtn'); if(b){ b.textContent='🟢 Eller serbest: Açık — "Arya" de'; b.style.background='#1f7a3d'; b.style.color='#fff'; }
+        startHF();
+      }
+      function startHF(){
+        if(!hfOn) return;
+        try{
+          hf=new SR(); hf.lang='tr-TR'; hf.continuous=true; hf.interimResults=true; hf.maxAlternatives=1;
+          let buf='';
+          hf.onstart=()=>{ if(hfArmed) setStatus('🟢 Dinlemede — "Arya" diye seslen'); };
+          hf.onresult=(e)=>{
+            // Arya TV'den konuşurken (veya hemen sonrasında) gelen sesi YOK SAY — kendini/TV'yi duymasın
+            if(window._speaking){ return; }
+            let s=''; for(let i=e.resultIndex;i<e.results.length;i++){ s+=e.results[i][0].transcript; }
+            s=s.trim(); if(!s || s.length<3) return;
+            // sadece final sonuçlara güven (TV'den sızan yarım sesler tetiklemesin)
+            let isFinal=false; try{ for(let i=e.resultIndex;i<e.results.length;i++){ if(e.results[i].isFinal) isFinal=true; } }catch(_){}
+            if(!isFinal) { if(WAKE.test(s)) setStatus('🟢 Efendim?'); return; }
+            if(WAKE.test(s)){
+              // "Arya" sonrası kalan sözü komut yap
+              const after=s.replace(WAKE,' ').replace(/\s+/g,' ').trim();
+              setStatus('Anladım: “'+s+'”');
+              if(after.length>=2){
+                if(/^(dur|kapan|sus|yeter|kapat)\b/i.test(after)){ hfStop(); return; }
+                send({t:'voice',q:after});   // komutu TV'ye gönder
+              } else {
+                setStatus('Efendim, seni dinliyorum…');   // sadece "Arya" dendi
+              }
+            }
+          };
+          hf.onerror=(ev)=>{ /* no-speech vs. olabilir; sessiz geç */ };
+          hf.onend=()=>{ if(hfOn){ clearTimeout(hfRestart); hfRestart=setTimeout(startHF,400); } };  // sürekli aç tut
+          hf.start();
+        }catch(e){ if(hfOn){ clearTimeout(hfRestart); hfRestart=setTimeout(startHF,800); } }
+      }
+      // Arya TV'den konuşurken mikrofonu sus, bitince geri aç (kendini duymasın)
+      window._stopListen=function(){ try{ if(rec){ rec.onresult=null; rec.onend=null; rec.abort(); } }catch(e){} listening=false; try{ if(hf) hf.abort(); }catch(e){} };
+      window._startHands=function(){ if(hfOn){ clearTimeout(hfRestart); hfRestart=setTimeout(startHF,500); } };
+      const handsBtn=$('handsBtn');
+      if(handsBtn) handsBtn.onclick=function(){ if(hfOn) hfStop(); else hfBegin(); };
+    }
+  }
+
+  // ----- routing -----
+  $('pickTV').onclick=startTV;
+  $('pickPhone').onclick=()=>startPhone('');
+  $('pickNote').onclick=startNoteSend;
+  if(params.get('go')==='phone'){ startPhone((params.get('code')||'').toUpperCase()); }
+  else if(params.get('go')==='tv'){ startTV(); }
+  else if(params.get('go')==='note'){ startNoteSend(); }
+  else {
+    // If launched as a home-screen app (standalone) and we already paired before,
+    // skip the chooser and go straight to phone mode (auto-connects to last TV).
+    const standalone = window.navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    if(standalone && recall('tvdesk_phone_last')){ startPhone(''); }
+  }
+})();
+</script>
+</body>
+</html>
