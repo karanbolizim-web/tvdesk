@@ -39,9 +39,12 @@ exports.handler = async function (event) {
   if (hist) userText += "Önceki konuşma: " + hist + "\n\n";
   userText += "Kullanıcı şunu söyledi: " + q;
 
-  try {
+  // Birden çok kararlı model dene; biri olmazsa diğerine geç (model adı kaymasına karşı dayanıklı)
+  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+
+  async function callModel(model) {
     const r = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + KEY,
+      "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + KEY,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,15 +55,58 @@ exports.handler = async function (event) {
         })
       }
     );
-    const data = await r.json();
+    return r;
+  }
+
+  // Düz metinden cevabı kurtaran yardımcı (JSON bozuksa bile konuşsun)
+  function rescueText(raw) {
+    if (!raw) return "";
+    var s = ("" + raw).trim();
+    // json ...  çitlerini temizle
+    s = s.replace(/json/gi, "").replace(//g, "").trim();
+    // İçinde "text":"..." varsa onu çek
+    var m = s.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (m && m[1]) {
+      try { return JSON.parse('"' + m[1] + '"'); } catch (e) { return m[1]; }
+    }
+    // Hiç JSON yoksa, düz metnin kendisini kullan (süslü parantezleri at)
+    if (s.indexOf("{") === -1 && s.length > 0) return s;
+    return "";
+  }
+
+  try {
+    let data = null, lastErr = null;
+    for (var i = 0; i < MODELS.length; i++) {
+      try {
+        const r = await callModel(MODELS[i]);
+        const j = await r.json();
+        if (j && j.candidates && j.candidates.length) { data = j; break; }
+        lastErr = j;            // model yok / hata -> sıradakini dene
+      } catch (e) { lastErr = e; }
+    }
+
+    if (!data) {
+      return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: "Şu an cevap veremedim, az sonra tekrar dene.", learn: [] }) };
+    }
+
     let txt = "";
     try {
       const parts = (data.candidates[0].content.parts) || [];
       txt = parts.map(function (pt) { return pt.text || ""; }).join("").trim();
     } catch (e) {}
+
     let out;
-    try { out = JSON.parse(txt); } catch (e) { out = { action: "answer", text: (txt && txt.trim()) ? txt : "Bunu tam anlayamadım, tekrar söyler misin?" }; }
-    if (!out || !out.action) out = { action: "answer", text: "Bunu tam anlayamadım, tekrar söyler misin?" };
+    try {
+      out = JSON.parse(txt);
+    } catch (e) {
+      // JSON bozuk: metni kurtar, "anlamadım" deme
+      var saved = rescueText(txt);
+      out = { action: "answer", text: saved || "Bunu tam anlayamadım, tekrar söyler misin?" };
+    }
+    if (!out || !out.action) {
+      var saved2 = rescueText(txt);
+      out = { action: "answer", text: saved2 || (out && out.text) || "Bunu tam anlayamadım, tekrar söyler misin?" };
+    }
     if (!Array.isArray(out.learn)) out.learn = [];
     out.learn = out.learn.filter(function (x) { return x && typeof x === "string" && x.trim().length > 2; }).slice(0, 4);
     return { statusCode: 200, headers, body: JSON.stringify(out) };
