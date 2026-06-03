@@ -36,7 +36,7 @@ exports.handler = async function (event) {
     "SANA AİLE HAFIZASI verilebilir (kim kimdir, geçmiş olaylar). Bu hafızayı kullanarak kişisel, seni-tanıyan biri gibi konuş. " +
     "Örneğin doğum gününü, geçmiş bir ameliyatı, bir iş görüşmesini hatırla ve uygun yerde nazikçe değin. " +
     "SADECE şu biçimde geçerli JSON döndür, başka hiçbir şey yazma:\n" +
-    '{"action":"answer","text":"...","mood":"...","learn":["..."]}  -> Sohbet/soru cevabı. text: KISA (en çok 3-4 cümle), sade, doğal konuşma dili, sesli okunacak; liste/madde/yıldız/markdown KULLANMA. ' +
+    '{"action":"answer","text":"...","mood":"...","learn":["..."]}  -> Sohbet/soru cevabı. text: sade, doğal konuşma dili, sesli okunacak; liste/madde/yıldız/markdown KULLANMA. NORMALDE kısa tut (2-4 cümle). AMA kullanıcı fikir/öneri/tavsiye isterse (örn. "ne önerirsin", "ne atsam", "ne paylaşsam", "fikir ver", "öner", "what should I", "suggest", "ideas") O ZAMAN cömert ol: 3-5 SOMUT, birbirinden farklı ve işe yarar öneri ver; gerekiyorsa biraz daha uzun konuş ama yine doğal cümlelerle, madde işareti olmadan. ' +
     'mood: bu cevabın DUYGUSU — şunlardan biri: "mutlu" (sevindirici/komik/güzel haber), "uzgun" (üzücü/kötü haber/teselli), "saskin" (şaşırtıcı/ilginç), "normal" (sıradan bilgi/sohbet). mood değerini AYNEN bırak (mutlu/uzgun/saskin/normal), ÇEVİRME. ' +
     'learn: SADECE kullanıcının bu sözünde GERÇEKTEN yeni ve kalıcı bir aile bilgisi varsa doldur (kişi, ilişki, önemli olay, tarih, tercih). Yoksa boş dizi [] ver. Her madde kısa cümle olsun, örn: "Mehmet kullanicinin oglu", "Babanin ameliyati oldu", "Tatile gidecekler".\n' +
     '{"action":"video","query":"...","learn":[]}  -> Müzik, şarkı, film, çizgi film, klip, ezan, Kuran istenirse. query: YouTube araması.\n' +
@@ -55,9 +55,12 @@ exports.handler = async function (event) {
   userText += "Kullanıcı şunu söyledi: " + q;
 
   // Birden çok kararlı model dene; biri olmazsa diğerine geç (model adı kaymasına karşı dayanıklı)
-  const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+  const MODELS = ["gemini-2.5-flash", "gemini-flash-latest"];
 
   async function callModel(model) {
+    const genConfig = { temperature: 0.6, maxOutputTokens: 1024, responseMimeType: "application/json" };
+    // Gemini 2.5'te "düşünme" varsayılan açık ve yavaşlatıyor; kapatınca çok daha hızlı yanıt verir.
+    if (model.indexOf("2.5") !== -1) { genConfig.thinkingConfig = { thinkingBudget: 0 }; }
     const r = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + KEY,
       {
@@ -66,7 +69,7 @@ exports.handler = async function (event) {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: sys }] },
           contents: [{ role: "user", parts: [{ text: userText }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 1024, responseMimeType: "application/json" }
+          generationConfig: genConfig
         })
       }
     );
