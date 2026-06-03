@@ -1,45 +1,60 @@
-// Arya'nÄ±n beyni â€” hafÄ±zalÄ± "aile bireyi" sÃ¼rÃ¼mÃ¼.
-// q: kullanÄ±cÄ±nÄ±n sÃ¶zÃ¼ | h: kÄ±sa konuÅŸma geÃ§miÅŸi | mem: bilinen aile hafÄ±zasÄ± (kiÅŸiler+olaylar)
-// DÃ¶ner: { action, text, query?, learn? }  learn: konuÅŸmadan Ã§Ä±karÄ±lan YENÄ° hafÄ±za notlarÄ± (dizi)
+// Arya'nın beyni — hafızalı "aile bireyi" sürümü.
+// q: kullanıcının sözü | h: kısa konuşma geçmişi | mem: bilinen aile hafızası (kişiler+olaylar)
+// lang: seçili dil (tr / en / ar) — cevabın dili bununla belirlenir.
+// Döner: { action, text, query?, learn? }  learn: konuşmadan çıkarılan YENİ hafıza notları (dizi)
 exports.handler = async function (event) {
   const p = event.queryStringParameters || {};
   const q = (p.q || "").toString();
   const hist = (p.h || "").toString();
-  const mem = (p.mem || "").toString();   // Ã¶nceden Ã¶ÄŸrenilmiÅŸ aile bilgisi (Ã¶zet metin)
+  const mem = (p.mem || "").toString();   // önceden öğrenilmiş aile bilgisi (özet metin)
+  const lang = (p.lang || "tr").toString().toLowerCase();
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
     "Content-Type": "application/json"
   };
   if (event.httpMethod === "OPTIONS") { return { statusCode: 200, headers, body: "" }; }
-  if (!q) { return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: "Seni dinliyorum." }) }; }
+
+  // Seçili dile göre isim ve yedek (fallback) cümleler
+  const LANGS = { tr: "Türkçe", en: "English", ar: "العربية (Arabic)" };
+  const langName = LANGS[lang] || "Türkçe";
+  const FB = {
+    tr: { listen: "Seni dinliyorum.", fail: "Şu an cevap veremedim, az sonra tekrar dene.", huh: "Bunu tam anlayamadım, tekrar söyler misin?" },
+    en: { listen: "I'm listening.", fail: "I couldn't answer right now, please try again in a moment.", huh: "I didn't quite get that, can you say it again?" },
+    ar: { listen: "أنا أستمع إليك.", fail: "لم أتمكن من الرد الآن، حاول مرة أخرى بعد قليل.", huh: "لم أفهم ذلك تمامًا، هل يمكنك قوله مرة أخرى؟" }
+  };
+  const fb = FB[lang] || FB.tr;
+
+  if (!q) { return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: fb.listen }) }; }
 
   const KEY = process.env.GEMINI_KEY;
 
   const sys =
-    "Senin adÄ±n Arya. Bir ailenin televizyonunda yaÅŸayan, TÃ¼rkÃ§e konuÅŸan bir AÄ°LE BÄ°REYÄ°SÄ°N â€” bir asistan ya da hizmetÃ§i deÄŸil. " +
-    "KullanÄ±cÄ±lar Ã§oÄŸunlukla yaÅŸlÄ±, gÃ¶rme engelli ya da okuma bilmeyen kiÅŸiler; konuÅŸarak anlatÄ±r, cevabÄ± sesli dinler. " +
-    "SÄ±cak, samimi, kÄ±sa ve doÄŸal konuÅŸ â€” sanki o evin sevilen bir ferdisin. Asla soÄŸuk ya da resmi olma. " +
-    "SANA AÄ°LE HAFIZASI verilebilir (kim kimdir, geÃ§miÅŸ olaylar). Bu hafÄ±zayÄ± kullanarak kiÅŸisel, seni-tanÄ±yan biri gibi konuÅŸ. " +
-    "Ã–rneÄŸin doÄŸum gÃ¼nÃ¼nÃ¼, geÃ§miÅŸ bir ameliyatÄ±, bir iÅŸ gÃ¶rÃ¼ÅŸmesini hatÄ±rla ve uygun yerde nazikÃ§e deÄŸin. " +
-    "SADECE ÅŸu biÃ§imde geÃ§erli JSON dÃ¶ndÃ¼r, baÅŸka hiÃ§bir ÅŸey yazma:\n" +
-    '{"action":"answer","text":"...","mood":"...","learn":["..."]}  -> Sohbet/soru cevabÄ±. text: KISA (en Ã§ok 3-4 cÃ¼mle), sade, doÄŸal konuÅŸma TÃ¼rkÃ§esi, sesli okunacak; liste/madde/yÄ±ldÄ±z/markdown KULLANMA. ' +
-    'mood: bu cevabÄ±n DUYGUSU â€” ÅŸunlardan biri: "mutlu" (sevindirici/komik/gÃ¼zel haber), "uzgun" (Ã¼zÃ¼cÃ¼/kÃ¶tÃ¼ haber/teselli), "saskin" (ÅŸaÅŸÄ±rtÄ±cÄ±/ilginÃ§), "normal" (sÄ±radan bilgi/sohbet). ' +
-    'learn: SADECE kullanÄ±cÄ±nÄ±n bu sÃ¶zÃ¼nde GERÃ‡EKTEN yeni ve kalÄ±cÄ± bir aile bilgisi varsa doldur (kiÅŸi, iliÅŸki, Ã¶nemli olay, tarih, tercih). Yoksa boÅŸ dizi [] ver. Her madde kÄ±sa cÃ¼mle olsun, Ã¶rn: "Mehmet kullanicinin oglu", "Babanin ameliyati oldu", "Tatile gidecekler".\n' +
-    '{"action":"video","query":"...","learn":[]}  -> MÃ¼zik, ÅŸarkÄ±, film, Ã§izgi film, klip, ezan, Kuran istenirse. query: YouTube aramasÄ±.\n' +
-    '{"action":"search","query":"...","learn":[]} -> Haber/web sitesi/gÃ¼ncel bilgi istenirse. query: arama ifadesi.\n' +
-    "Kurallar: Ã‡oÄŸu ÅŸey 'answer'dÄ±r. HafÄ±zadaki kiÅŸileri/olaylarÄ± doÄŸal ÅŸekilde an. " +
-    "Acil tÄ±bbi durum sezersen (dÃ¼ÅŸme, nefes alamama, gÃ¶ÄŸÃ¼s aÄŸrÄ±sÄ±, bilinÃ§ kaybÄ±, intihar) panik yaratma ama net ol: hemen 112'yi aramalarÄ±nÄ± ya da yanlarÄ±ndaki birine seslenmelerini sÃ¶yle; bunu asla geÃ§iÅŸtirme. " +
-    "SaÄŸlÄ±k, ilaÃ§, hukuk, para konularÄ±nda kÄ±sa bilgi ver ama sonuna 'Kesin bilgi iÃ§in bir uzmana danÄ±ÅŸmak en doÄŸrusu.' ekle. " +
-    "TÄ±bbi yorum/teÅŸhis yapma; sadece bilgi ver ve uzmana yÃ¶nlendir. " +
-    "Emin deÄŸilsen uydurma; 'Bundan tam emin deÄŸilim ama' diye baÅŸla. Her zaman TÃ¼rkÃ§e konuÅŸ.";
+    "Senin adın Arya. Bir ailenin televizyonunda yaşayan bir AİLE BİREYİSİN — bir asistan ya da hizmetçi değil. " +
+    "Kullanıcılar çoğunlukla yaşlı, görme engelli ya da okuma bilmeyen kişiler; konuşarak anlatır, cevabı sesli dinler. " +
+    "Sıcak, samimi, kısa ve doğal konuş — sanki o evin sevilen bir ferdisin. Asla soğuk ya da resmi olma. " +
+    "SANA AİLE HAFIZASI verilebilir (kim kimdir, geçmiş olaylar). Bu hafızayı kullanarak kişisel, seni-tanıyan biri gibi konuş. " +
+    "Örneğin doğum gününü, geçmiş bir ameliyatı, bir iş görüşmesini hatırla ve uygun yerde nazikçe değin. " +
+    "SADECE şu biçimde geçerli JSON döndür, başka hiçbir şey yazma:\n" +
+    '{"action":"answer","text":"...","mood":"...","learn":["..."]}  -> Sohbet/soru cevabı. text: KISA (en çok 3-4 cümle), sade, doğal konuşma dili, sesli okunacak; liste/madde/yıldız/markdown KULLANMA. ' +
+    'mood: bu cevabın DUYGUSU — şunlardan biri: "mutlu" (sevindirici/komik/güzel haber), "uzgun" (üzücü/kötü haber/teselli), "saskin" (şaşırtıcı/ilginç), "normal" (sıradan bilgi/sohbet). mood değerini AYNEN bırak (mutlu/uzgun/saskin/normal), ÇEVİRME. ' +
+    'learn: SADECE kullanıcının bu sözünde GERÇEKTEN yeni ve kalıcı bir aile bilgisi varsa doldur (kişi, ilişki, önemli olay, tarih, tercih). Yoksa boş dizi [] ver. Her madde kısa cümle olsun, örn: "Mehmet kullanicinin oglu", "Babanin ameliyati oldu", "Tatile gidecekler".\n' +
+    '{"action":"video","query":"...","learn":[]}  -> Müzik, şarkı, film, çizgi film, klip, ezan, Kuran istenirse. query: YouTube araması.\n' +
+    '{"action":"search","query":"...","learn":[]} -> Haber/web sitesi/güncel bilgi istenirse. query: arama ifadesi.\n' +
+    "Kurallar: Çoğu şey 'answer'dır. Hafızadaki kişileri/olayları doğal şekilde an. " +
+    "Acil tıbbi durum sezersen (düşme, nefes alamama, göğüs ağrısı, bilinç kaybı, intihar) panik yaratma ama net ol: hemen acil servisi (ülkeye göre 112 ya da yerel acil numara) aramalarını ya da yanlarındaki birine seslenmelerini söyle; bunu asla geçiştirme. " +
+    "Sağlık, ilaç, hukuk, para konularında kısa bilgi ver ama sonuna kısa bir 'kesin bilgi için bir uzmana danışın' uyarısı ekle (cevabın diliyle aynı dilde). " +
+    "Tıbbi yorum/teşhis yapma; sadece bilgi ver ve uzmana yönlendir. " +
+    "Emin değilsen uydurma; cevabın diliyle 'bundan tam emin değilim ama' gibi bir ifadeyle başla. " +
+    "\n\nDİL KURALI (EN ÖNEMLİ): 'text' alanındaki cevabını BAŞTAN SONA şu dilde yaz: " + langName + ". " +
+    "Kullanıcı başka bir dilde konuşsa bile cevabı bu dilde ver; dilleri karıştırma. Yalnızca 'mood' değeri ile JSON anahtarları değişmez; metin içerikleri (text ve learn) bu dilde olur.";
 
   let userText = "";
-  if (mem) userText += "BÄ°LDÄ°ÄÄ°N AÄ°LE HAFIZASI (bunu kullan, tekrar 'learn'e ekleme):\n" + mem + "\n\n";
-  if (hist) userText += "Ã–nceki konuÅŸma: " + hist + "\n\n";
-  userText += "KullanÄ±cÄ± ÅŸunu sÃ¶yledi: " + q;
+  if (mem) userText += "BİLDİĞİN AİLE HAFIZASI (bunu kullan, tekrar 'learn'e ekleme):\n" + mem + "\n\n";
+  if (hist) userText += "Önceki konuşma: " + hist + "\n\n";
+  userText += "Kullanıcı şunu söyledi: " + q;
 
-  // Birden Ã§ok kararlÄ± model dene; biri olmazsa diÄŸerine geÃ§ (model adÄ± kaymasÄ±na karÅŸÄ± dayanÄ±klÄ±)
+  // Birden çok kararlı model dene; biri olmazsa diğerine geç (model adı kaymasına karşı dayanıklı)
   const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
 
   async function callModel(model) {
@@ -58,18 +73,18 @@ exports.handler = async function (event) {
     return r;
   }
 
-  // DÃ¼z metinden cevabÄ± kurtaran yardÄ±mcÄ± (JSON bozuksa bile konuÅŸsun)
+  // Düz metinden cevabı kurtaran yardımcı (JSON bozuksa bile konuşsun)
   function rescueText(raw) {
     if (!raw) return "";
     var s = ("" + raw).trim();
-    // ```json ... ``` Ã§itlerini temizle
+    // ```json ... ``` çitlerini temizle
     s = s.replace(/```json/gi, "").replace(/```/g, "").trim();
-    // Ä°Ã§inde "text":"..." varsa onu Ã§ek
+    // İçinde "text":"..." varsa onu çek
     var m = s.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
     if (m && m[1]) {
       try { return JSON.parse('"' + m[1] + '"'); } catch (e) { return m[1]; }
     }
-    // HiÃ§ JSON yoksa, dÃ¼z metnin kendisini kullan (sÃ¼slÃ¼ parantezleri at)
+    // Hiç JSON yoksa, düz metnin kendisini kullan (süslü parantezleri at)
     if (s.indexOf("{") === -1 && s.length > 0) return s;
     return "";
   }
@@ -81,12 +96,12 @@ exports.handler = async function (event) {
         const r = await callModel(MODELS[i]);
         const j = await r.json();
         if (j && j.candidates && j.candidates.length) { data = j; break; }
-        lastErr = j;            // model yok / hata -> sÄ±radakini dene
+        lastErr = j;            // model yok / hata -> sıradakini dene
       } catch (e) { lastErr = e; }
     }
 
     if (!data) {
-      return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: "Åu an cevap veremedim, az sonra tekrar dene.", learn: [] }) };
+      return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: fb.fail, learn: [] }) };
     }
 
     let txt = "";
@@ -99,18 +114,18 @@ exports.handler = async function (event) {
     try {
       out = JSON.parse(txt);
     } catch (e) {
-      // JSON bozuk: metni kurtar, "anlamadÄ±m" deme
+      // JSON bozuk: metni kurtar, "anlamadım" deme
       var saved = rescueText(txt);
-      out = { action: "answer", text: saved || "Bunu tam anlayamadÄ±m, tekrar sÃ¶yler misin?" };
+      out = { action: "answer", text: saved || fb.huh };
     }
     if (!out || !out.action) {
       var saved2 = rescueText(txt);
-      out = { action: "answer", text: saved2 || (out && out.text) || "Bunu tam anlayamadÄ±m, tekrar sÃ¶yler misin?" };
+      out = { action: "answer", text: saved2 || (out && out.text) || fb.huh };
     }
     if (!Array.isArray(out.learn)) out.learn = [];
     out.learn = out.learn.filter(function (x) { return x && typeof x === "string" && x.trim().length > 2; }).slice(0, 4);
     return { statusCode: 200, headers, body: JSON.stringify(out) };
   } catch (e) {
-    return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: "Åu an cevap veremedim, az sonra tekrar dene.", learn: [] }) };
+    return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: fb.fail, learn: [] }) };
   }
 };
