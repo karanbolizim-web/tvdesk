@@ -11,6 +11,7 @@ exports.handler = async function (event) {
   const mem = (p.mem || "").toString();   // önceden öğrenilmiş aile bilgisi (özet metin)
   const lang = (p.lang || "tr").toString().toLowerCase();
   const who = (p.who || "").toString().trim();   // o an konuşan kişi (oturum boyunca hatırlanır)
+  const ctx = (p.ctx || "").toString();   // web arama sonuçları (özetlenecek metin) — varsa ÖZET modu
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -48,7 +49,24 @@ exports.handler = async function (event) {
     todayTR = d.toISOString().slice(0, 10);
   }
 
-  const sys =
+  let sys;
+  if (ctx) {
+    // ÖZET MODU: web arama sonuçları verildi; bunları sade, sesli okunacak bir cevaba dönüştür.
+    sys =
+      "Senin adın Arya, bir ailenin televizyonunda yaşayan sıcak bir aile bireyisin. " +
+      "Kullanıcı bir şey sordu ve sana o konuyla ilgili İNTERNET ARAMA SONUÇLARI verildi. " +
+      "Görevin: bu sonuçlara dayanarak kullanıcının sorusuna SADE, DOĞAL, sesli okunacak bir CEVAP/ÖZET vermek. " +
+      "Sıcak ve samimi konuş, sanki o evin bir ferdisin. 3-6 cümle yeter; gerekiyorsa biraz uzat ama doğal konuşma diliyle. " +
+      "Liste, madde, yıldız, başlık, markdown KULLANMA — düz cümlelerle anlat. " +
+      "SADECE sana verilen sonuçlardaki bilgiyi kullan; UYDURMA. Sonuçlarda net bir bilgi yoksa, bunu nazikçe söyle. " +
+      "Bugünün tarihi: " + todayTR + " (yıl: " + yearNow + "). " +
+      "\n\nSADECE şu biçimde geçerli JSON döndür, başka hiçbir şey yazma:\n" +
+      '{"action":"answer","text":"...","mood":"...","learn":[]}\n' +
+      'text: yukarıdaki kurallara uyan sade cevap. ' +
+      'mood: cevabın duygusu — "mutlu", "uzgun", "saskin" ya da "normal" (AYNEN bırak, çevirme). learn: her zaman boş dizi []. ' +
+      "\n\nDİL KURALI (EN ÖNEMLİ): 'text' alanını BAŞTAN SONA şu dilde yaz: " + langName + ". Dilleri karıştırma.";
+  } else {
+  sys =
     "Senin adın Arya. Bir ailenin televizyonunda yaşayan bir AİLE BİREYİSİN — bir asistan ya da hizmetçi değil. " +
     "Bu cihazı bir ailenin HER FERDİ kullanır: çocuk, genç, yetişkin, yaşlı. Herkes konuşarak anlatır, cevabı sesli dinler; " +
     "okuma bilmeyenler ve görme zorluğu yaşayanlar dahil herkes rahatça kullanabilsin diye sade ve sesle çalışırsın. " +
@@ -79,12 +97,20 @@ exports.handler = async function (event) {
     "Emin değilsen uydurma; cevabın diliyle 'bundan tam emin değilim ama' gibi bir ifadeyle başla. " +
     "\n\nDİL KURALI (EN ÖNEMLİ): 'text' alanındaki cevabını BAŞTAN SONA şu dilde yaz: " + langName + ". " +
     "Kullanıcı başka bir dilde konuşsa bile cevabı bu dilde ver; dilleri karıştırma. Yalnızca 'mood' değeri ile JSON anahtarları değişmez; metin içerikleri (text ve learn) bu dilde olur.";
+  }
 
   let userText = "";
-  if (mem) userText += "BİLDİĞİN AİLE HAFIZASI (bunu kullan, tekrar 'learn'e ekleme):\n" + mem + "\n\n";
-  if (who) userText += "ŞU AN KONUŞAN KİŞİ: " + who + " — ona bu isimle/yakınlıkla sıcakça hitap et. Kendisiyle ilgili sorularda (yaş, doğum günü vb.) SADECE bu kişinin hafızadaki bilgisini kullan.\n\n";
-  if (hist) userText += "Önceki konuşma: " + hist + "\n\n";
-  userText += "Kullanıcı şunu söyledi: " + q;
+  if (ctx) {
+    // ÖZET MODU: soru + arama sonuçları
+    userText += "Kullanıcının sorusu: " + q + "\n\n";
+    userText += "İnternet arama sonuçları:\n" + ctx + "\n\n";
+    userText += "Bu sonuçlara dayanarak, kullanıcının sorusuna sade ve sesli okunacak bir özet/cevap ver.";
+  } else {
+    if (mem) userText += "BİLDİĞİN AİLE HAFIZASI (bunu kullan, tekrar 'learn'e ekleme):\n" + mem + "\n\n";
+    if (who) userText += "ŞU AN KONUŞAN KİŞİ: " + who + " — ona bu isimle/yakınlıkla sıcakça hitap et. Kendisiyle ilgili sorularda (yaş, doğum günü vb.) SADECE bu kişinin hafızadaki bilgisini kullan.\n\n";
+    if (hist) userText += "Önceki konuşma: " + hist + "\n\n";
+    userText += "Kullanıcı şunu söyledi: " + q;
+  }
 
   // Birden çok kararlı model dene; biri olmazsa diğerine geç (model adı kaymasına karşı dayanıklı)
   const MODELS = ["gemini-2.5-flash", "gemini-flash-latest"];
