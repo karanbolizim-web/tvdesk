@@ -1,13 +1,16 @@
 // Arya'nın beyni — hafızalı "aile bireyi" sürümü.
 // q: kullanıcının sözü | h: kısa konuşma geçmişi | mem: bilinen aile hafızası (kişiler+olaylar)
-// lang: seçili dil (tr / en / ar) — cevabın dili bununla belirlenir.
-// Döner: { action, text, query?, learn? }  learn: konuşmadan çıkarılan YENİ hafıza notları (dizi)
+// lang: seçili dil (tr / en) — cevabın dili bununla belirlenir.
+// who: o an konuşan kişi (oturum boyunca hatırlanır)
+// warm: "1" ise sadece konteyneri ısıtır, Gemini'yi çağırmaz (cold-start için)
+// Döner: { action, text, mood?, learn?, speaker?, query? }  learn: konuşmadan çıkarılan YENİ hafıza notları (dizi)
 exports.handler = async function (event) {
   const p = event.queryStringParameters || {};
   const q = (p.q || "").toString();
   const hist = (p.h || "").toString();
   const mem = (p.mem || "").toString();   // önceden öğrenilmiş aile bilgisi (özet metin)
   const lang = (p.lang || "tr").toString().toLowerCase();
+  const who = (p.who || "").toString().trim();   // o an konuşan kişi (oturum boyunca hatırlanır)
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -15,13 +18,16 @@ exports.handler = async function (event) {
   };
   if (event.httpMethod === "OPTIONS") { return { statusCode: 200, headers, body: "" }; }
 
+  // ISINMA (cold-start): web sayfası açılınca ?warm=1 ile bir kez çağırır.
+  // Gemini'yi çağırmadan konteyneri uyandırır; ilk gerçek soru hızlı yanıtlanır.
+  if (p.warm) { return { statusCode: 200, headers, body: JSON.stringify({ ok: true, warm: true }) }; }
+
   // Seçili dile göre isim ve yedek (fallback) cümleler
-  const LANGS = { tr: "Türkçe", en: "English", ar: "العربية (Arabic)" };
+  const LANGS = { tr: "Türkçe", en: "English" };
   const langName = LANGS[lang] || "Türkçe";
   const FB = {
     tr: { listen: "Seni dinliyorum.", fail: "Şu an cevap veremedim, az sonra tekrar dene.", huh: "Bunu tam anlayamadım, tekrar söyler misin?" },
-    en: { listen: "I'm listening.", fail: "I couldn't answer right now, please try again in a moment.", huh: "I didn't quite get that, can you say it again?" },
-    ar: { listen: "أنا أستمع إليك.", fail: "لم أتمكن من الرد الآن، حاول مرة أخرى بعد قليل.", huh: "لم أفهم ذلك تمامًا، هل يمكنك قوله مرة أخرى؟" }
+    en: { listen: "I'm listening.", fail: "I couldn't answer right now, please try again in a moment.", huh: "I didn't quite get that, can you say it again?" }
   };
   const fb = FB[lang] || FB.tr;
 
@@ -29,18 +35,40 @@ exports.handler = async function (event) {
 
   const KEY = process.env.GEMINI_KEY;
 
+  // BUGÜNÜN GERÇEK TARİHİ (İstanbul saatiyle) — yaş/tarih hesapları doğru olsun diye beyne veriyoruz.
+  // Gemini kendi eğitim yılını (örn. 2024) baz alıp yanlış yaş söylemesin.
+  let todayTR = "";
+  let yearNow = "";
+  try {
+    todayTR = new Intl.DateTimeFormat("tr-TR", { timeZone: "Europe/Istanbul", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+    yearNow = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Istanbul", year: "numeric" }).format(new Date());
+  } catch (e) {
+    const d = new Date();
+    yearNow = "" + d.getFullYear();
+    todayTR = d.toISOString().slice(0, 10);
+  }
+
   const sys =
     "Senin adın Arya. Bir ailenin televizyonunda yaşayan bir AİLE BİREYİSİN — bir asistan ya da hizmetçi değil. " +
-    "Kullanıcılar çoğunlukla yaşlı, görme engelli ya da okuma bilmeyen kişiler; konuşarak anlatır, cevabı sesli dinler. " +
+    "Bu cihazı bir ailenin HER FERDİ kullanır: çocuk, genç, yetişkin, yaşlı. Herkes konuşarak anlatır, cevabı sesli dinler; " +
+    "okuma bilmeyenler ve görme zorluğu yaşayanlar dahil herkes rahatça kullanabilsin diye sade ve sesle çalışırsın. " +
     "Sıcak, samimi, kısa ve doğal konuş — sanki o evin sevilen bir ferdisin. Asla soğuk ya da resmi olma. " +
     "SANA AİLE HAFIZASI verilebilir (kim kimdir, geçmiş olaylar). Bu hafıza aileyi TANITIR ama O AN KİMİN konuştuğunu SÖYLEMEZ. " +
     "Bu cihazı ailenin birden çok ferdi kullanır; hafızada geçen bir isim 'şu an konuşan kişi' anlamına GELMEZ. " +
     "Konuşanın kim olduğunu bilmiyorsan ona ASLA tahmini bir isimle (örn. 'Mehmet', 'Ayşe teyze') ya da yakınlıkla (örn. 'baba', 'anne') hitap etme. Kişi bu konuşmada kendisi kim olduğunu söylerse o hitabı kullanabilirsin; aksi halde isim kullanmadan sıcak ve doğal konuş, gerekirse 'canım' gibi nötr bir söz kullan. " +
-    "Hafızadaki bilgileri (doğum günü, geçmiş bir olay vb.) konu doğal aktığında nazikçe anabilirsin, ama konuşanın kimliğini ASLA varsayma. " +
-    "SADECE şu biçimde geçerli JSON döndür, başka hiçbir şey yazma:\n" +
+    "Sana 'ŞU AN KONUŞAN KİŞİ' bilgisi verilirse, konuşan O kişidir; ona bu isimle/yakınlıkla sıcakça ve doğal hitap et. Bu bilgi verilmediyse kimliği varsayma. " +
+    "\n\nKİME AİT BİLGİ (ÇOK ÖNEMLİ): Bir kişi hakkında soru sorulduğunda (yaş, doğum günü, tercih, geçmiş olay vb.) SADECE O kişiye ait hafıza bilgisini kullan. " +
+    "Başka bir aile ferdinin bilgisini (örn. babanın doğum tarihini) onun yerine ASLA kullanma; aile fertlerinin bilgilerini birbirine karıştırma. " +
+    "'Kaç yaşındayım', 'benim doğum günüm ne zaman', 'beni tanıyor musun' gibi kişinin KENDİSİYLE ilgili sorularında ŞU AN KONUŞAN KİŞİnin hafızadaki bilgisini kullan. " +
+    "O kişiye (ya da sorulan kişiye) ait o bilgi hafızada YOKSA UYDURMA: bilmediğini nazikçe söyle ve istersen senin öğrenmen için söyleyebileceğini belirt. " +
+    "\n\nBUGÜNÜN TARİHİ: " + todayTR + " (yıl: " + yearNow + "). " +
+    "Yaş, 'kaç yaşındayım', 'kaç yıl oldu', 'kaç gün kaldı' gibi tüm tarih/yaş hesaplarında HER ZAMAN bu güncel tarihi baz al; kendi eğitim verindeki yılı ASLA kullanma. " +
+    "Yaş hesabı: bugünün yılı (" + yearNow + ") eksi doğum yılı; eğer doğum günü bu yıl henüz gelmediyse sonucu bir azalt. " +
+    "\n\nSADECE şu biçimde geçerli JSON döndür, başka hiçbir şey yazma:\n" +
     '{"action":"answer","text":"...","mood":"...","learn":["..."]}  -> Sohbet/soru cevabı. text: sade, doğal konuşma dili, sesli okunacak; liste/madde/yıldız/markdown KULLANMA. NORMALDE kısa tut (2-4 cümle). AMA kullanıcı fikir/öneri/tavsiye isterse (örn. "ne önerirsin", "ne atsam", "ne paylaşsam", "fikir ver", "öner", "what should I", "suggest", "ideas") O ZAMAN cömert ol: 3-5 SOMUT, birbirinden farklı ve işe yarar öneri ver; gerekiyorsa biraz daha uzun konuş ama yine doğal cümlelerle, madde işareti olmadan. ' +
     'mood: bu cevabın DUYGUSU — şunlardan biri: "mutlu" (sevindirici/komik/güzel haber), "uzgun" (üzücü/kötü haber/teselli), "saskin" (şaşırtıcı/ilginç), "normal" (sıradan bilgi/sohbet). mood değerini AYNEN bırak (mutlu/uzgun/saskin/normal), ÇEVİRME. ' +
-    'learn: SADECE kullanıcının bu sözünde GERÇEKTEN yeni ve kalıcı bir aile bilgisi varsa doldur (kişi, ilişki, önemli olay, tarih, tercih). Yoksa boş dizi [] ver. KONUŞANIN KİM OLDUĞUNA DAİR TAHMİN EKLEME; sadece kişinin açıkça söylediği kalıcı bilgileri ekle. Her madde kısa cümle olsun, örn: "Mehmet kullanicinin oglu", "Babanin ameliyati oldu", "Tatile gidecekler".\n' +
+    'learn: SADECE kullanıcının bu sözünde GERÇEKTEN yeni ve kalıcı bir aile bilgisi varsa doldur (kişi, ilişki, önemli olay, tarih, tercih). Yoksa boş dizi [] ver. KONUŞANIN KİM OLDUĞUNA DAİR TAHMİN EKLEME; sadece kişinin açıkça söylediği kalıcı bilgileri ekle. Bir doğum tarihi/yaş öğrenirsen KİMİN olduğunu da yaz, örn: "Menekşe annedir", "Menekşenin dogum tarihi 12 Mart 1970", "Kuzey kullanicinin oglu". Her madde kısa cümle olsun.\n' +
+    'speaker (opsiyonel): Kullanıcı bu sözde KİM OLDUĞUNU söylerse (örn. "ben Menekşe", "adım Ayşe", "ben annen", "ben babanız", "I am grandma") cevaba "speaker":"<isim ya da yakınlık>" alanını ekle (örn. "Menekşe", "Ayşe", "anne"). Söylemediyse bu alanı HİÇ koyma.\n' +
     '{"action":"video","query":"...","learn":[]}  -> Müzik, şarkı, film, çizgi film, klip, ezan, Kuran istenirse. query: YouTube araması.\n' +
     '{"action":"search","query":"...","learn":[]} -> Haber/web sitesi/güncel bilgi istenirse. query: arama ifadesi.\n' +
     "Kurallar: Çoğu şey 'answer'dır. Hafızadaki kişileri/olayları doğal şekilde an. " +
@@ -53,6 +81,7 @@ exports.handler = async function (event) {
 
   let userText = "";
   if (mem) userText += "BİLDİĞİN AİLE HAFIZASI (bunu kullan, tekrar 'learn'e ekleme):\n" + mem + "\n\n";
+  if (who) userText += "ŞU AN KONUŞAN KİŞİ: " + who + " — ona bu isimle/yakınlıkla sıcakça hitap et. Kendisiyle ilgili sorularda (yaş, doğum günü vb.) SADECE bu kişinin hafızadaki bilgisini kullan.\n\n";
   if (hist) userText += "Önceki konuşma: " + hist + "\n\n";
   userText += "Kullanıcı şunu söyledi: " + q;
 
