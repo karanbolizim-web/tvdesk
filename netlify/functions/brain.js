@@ -19,6 +19,58 @@ exports.handler = async function (event) {
   };
   if (event.httpMethod === "OPTIONS") { return { statusCode: 200, headers, body: "" }; }
 
+  // GÖRME (kamera) modu: web bir fotoğraf POST ederse (image alanı), onu Gemini ile yorumla.
+  // Nesne/bitki tanır; bitki hastaysa neyi olduğunu ve basit bakım önerisini söyler.
+  // Anahtar yine SUNUCUDA (process.env.GEMINI_KEY) — ayrı dosya/fonksiyon gerekmez.
+  async function visionReply(pb, headers) {
+    const vlang = (pb.lang === "en") ? "en" : "tr";
+    const VKEY = process.env.GEMINI_KEY;
+    if (!VKEY) {
+      return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: vlang === "en" ? "Vision isn't set up yet." : "Görme özelliği için anahtar ayarlı değil.", learn: [] }) };
+    }
+    const image = ("" + (pb.image || "")).replace(/^data:image\/\w+;base64,/, "");
+    const vq = ("" + (pb.q || "")).slice(0, 300);
+    if (!image) {
+      return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: vlang === "en" ? "I couldn't get the photo." : "Fotoğrafı alamadım.", learn: [] }) };
+    }
+    const vsys = vlang === "en"
+      ? "You are Arya, a warm home assistant for elderly and low-vision users. Look at the photo and answer in plain, simple English: 2-4 short sentences, no markdown, no lists. Identify the object or plant. If it's a plant that looks unhealthy, briefly say what seems wrong and give one or two simple care steps. If unsure, say so. Speak directly to the person."
+      : "Sen Arya'sın; yaşlı ve az gören kullanıcılar için sıcak bir ev asistanısın. Fotoğrafa bak ve sade, anlaşılır Türkçe ile yanıtla: 2-4 kısa cümle, madde işareti veya markdown kullanma. Nesneyi ya da bitkiyi tanı. Bitki hasta görünüyorsa neyi olduğunu kısaca söyle ve bir-iki basit bakım önerisi ver. Emin değilsen belirt. Doğrudan kişiye hitap et.";
+    const vUser = (vq && vq.trim()) ? vq.trim() : (vlang === "en" ? "What is this? If it's a plant, is it healthy?" : "Bu nedir? Eğer bitkiyse sağlıklı mı?");
+    const vModels = ["gemini-2.5-flash", "gemini-flash-latest"];
+    for (var vi = 0; vi < vModels.length; vi++) {
+      try {
+        const gc = { temperature: 0.4, maxOutputTokens: 320 };
+        if (vModels[vi].indexOf("2.5") !== -1) { gc.thinkingConfig = { thinkingBudget: 0 }; }
+        const rr = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/models/" + vModels[vi] + ":generateContent?key=" + VKEY,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: vsys }] },
+              contents: [{ role: "user", parts: [{ text: vUser }, { inline_data: { mime_type: "image/jpeg", data: image } }] }],
+              generationConfig: gc
+            })
+          }
+        );
+        const jj = await rr.json();
+        if (jj && jj.candidates && jj.candidates.length) {
+          var vt = "";
+          try { vt = (jj.candidates[0].content.parts || []).map(function (x) { return x.text || ""; }).join(" ").trim(); } catch (e) {}
+          if (vt) { return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: vt, learn: [] }) }; }
+        }
+      } catch (e) {}
+    }
+    return { statusCode: 200, headers, body: JSON.stringify({ action: "answer", text: vlang === "en" ? "I couldn't look right now, try again shortly." : "Şu an bakamadım, az sonra tekrar dene.", learn: [] }) };
+  }
+
+  if (event.httpMethod === "POST") {
+    let pb = {};
+    try { pb = JSON.parse(event.body || "{}"); } catch (e) {}
+    if (pb && pb.image) { return await visionReply(pb, headers); }
+  }
+
   // ISINMA (cold-start): web sayfası açılınca ?warm=1 ile bir kez çağırır.
   // Gemini'yi çağırmadan konteyneri uyandırır; ilk gerçek soru hızlı yanıtlanır.
   if (p.warm) { return { statusCode: 200, headers, body: JSON.stringify({ ok: true, warm: true }) }; }
